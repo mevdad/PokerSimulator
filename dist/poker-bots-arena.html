@@ -1,0 +1,2457 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poker Bots Arena — кеш-симулятор NL Hold'em</title>
+<style>
+:root {
+  --bg: #0e1218;
+  --panel: #161c25;
+  --panel2: #1c2430;
+  --line: #28323f;
+  --text: #e6ebf2;
+  --muted: #8b97a8;
+  --accent: #f5b942;
+  --green: #2fbf71;
+  --red: #ef5b5b;
+  --felt1: #1b7a4d;
+  --felt2: #0f4d31;
+  --rail: #4a2f1b;
+  --card-red: #d6313b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1, h2 { margin: 0; }
+.muted { color: var(--muted); }
+button, select, input { font: inherit; color: inherit; }
+
+/* ---------- верхняя панель ---------- */
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .logo { font-size: 30px; color: var(--accent); line-height: 1; }
+.brand h1 { font-size: 18px; letter-spacing: .3px; }
+.brand .sub { font-size: 12px; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: 1; }
+.btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: #3d4b5e; background: #232d3b; }
+.btn.primary { background: #2a6fdb; border-color: #2a6fdb; color: #fff; }
+.btn.primary:hover { background: #3b7fe8; }
+.speed, .check { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.speed select, .grid-form input { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.kpis { display: flex; gap: 8px; }
+.kpi { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; text-align: center; min-width: 78px; }
+.kpi span { display: block; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.kpi small { color: var(--muted); font-size: 11px; }
+
+/* ---------- раскладка ---------- */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 630px; gap: 14px; padding: 14px 18px 30px; align-items: start; }
+@media (max-width: 1250px) { .layout { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+.panel-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 600; margin-bottom: 8px; }
+.panel-title small { color: var(--muted); font-weight: 400; }
+.filters { display: flex; gap: 6px; }
+.filters select, .filters input { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; width: 110px; }
+
+/* ---------- столы ---------- */
+.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.table-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.table-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: 600; }
+.table-head small { color: var(--muted); font-weight: 400; }
+.felt-wrap { position: relative; width: 100%; padding-top: 68%; margin-top: 30px; margin-bottom: 14px; }
+.felt { position: absolute; inset: 0; margin: 0; border-radius: 50% / 46%; background: radial-gradient(ellipse at center, var(--felt1) 0%, var(--felt2) 100%); border: 10px solid var(--rail); box-shadow: inset 0 0 30px rgba(0,0,0,.55), 0 4px 14px rgba(0,0,0,.5); }
+.felt-inner { position: absolute; inset: 0; }
+.center-info { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; width: 54%; }
+.pot { display: inline-block; background: rgba(0,0,0,.45); padding: 2px 12px; border-radius: 20px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; min-height: 22px; }
+.board-cards { display: flex; justify-content: center; gap: 4px; margin-top: 6px; min-height: 44px; }
+.street-name { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 3px; letter-spacing: .5px; text-transform: uppercase; }
+
+.card { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 30px; height: 42px; border-radius: 5px; background: #fff; color: #111; font-weight: 700; font-size: 14px; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,.5); user-select: none; }
+.card.red { color: var(--card-red); }
+.card .s { font-size: 14px; margin-top: 1px; }
+.card.back { background: repeating-linear-gradient(45deg, #2f4a8a, #2f4a8a 4px, #23386b 4px, #23386b 8px); border: 1px solid #fff; color: transparent; }
+.card.empty { background: rgba(0,0,0,.18); box-shadow: none; border: 1px dashed rgba(255,255,255,.18); }
+.card.sm { width: 24px; height: 34px; font-size: 12px; }
+.card.sm .s { font-size: 12px; }
+
+.seat { position: absolute; transform: translate(-50%, -50%); width: 25%; min-width: 96px; text-align: center; z-index: 2; }
+.seat .plate { background: rgba(14,18,24,.92); border: 2px solid #354355; border-radius: 10px; padding: 3px 4px 4px; position: relative; }
+.seat.empty .plate { opacity: .35; border-style: dashed; }
+.seat .name { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.seat .name:hover { color: var(--accent); }
+.seat .stack { font-size: 12px; color: #9fe3b8; font-variant-numeric: tabular-nums; }
+.seat .tag { font-size: 10px; color: var(--muted); }
+.seat .cards { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); display: flex; gap: 2px; z-index: 3; }
+.seat.folded .plate { opacity: .45; }
+.seat.folded .cards { opacity: .35; }
+.seat.acting .plate { border-color: var(--accent); box-shadow: 0 0 12px rgba(245,185,66,.7); }
+.seat.winner .plate { border-color: var(--green); box-shadow: 0 0 14px rgba(47,191,113,.8); }
+.seat .action { position: absolute; left: 50%; bottom: -17px; transform: translateX(-50%); font-size: 11px; font-weight: 600; background: #000; color: #fff; padding: 1px 7px; border-radius: 9px; white-space: nowrap; z-index: 4; }
+.seat .action.a-fold { color: #9aa3b0; }
+.seat .action.a-raise { color: #ffd479; }
+.seat .action.a-call { color: #9fd2ff; }
+.seat .action.a-win { color: var(--green); }
+.seat .pos { position: absolute; left: -7px; bottom: -8px; font-size: 9.5px; font-weight: 700; background: #2a3442; color: #cdd6e3; padding: 0 5px; border-radius: 8px; z-index: 5; }
+.seat .pos:empty { display: none; }
+.seat .res { font-size: 11px; font-weight: 700; }
+.res.pos-res { color: var(--green); }
+.res.neg-res { color: var(--red); }
+.dealer { position: absolute; right: -9px; top: -9px; width: 18px; height: 18px; border: 2px solid #f5b942; z-index: 5; border-radius: 50%; background: #fff; color: #000; font-size: 10px; font-weight: 800; line-height: 14px; display: none; }
+.seat.btn .dealer { display: block; }
+
+.betchip { position: absolute; transform: translate(-50%, -50%); background: rgba(0,0,0,.55); color: #ffe08a; border-radius: 12px; padding: 1px 8px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; z-index: 1; display: none; }
+.betchip::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(#f0556a, #a01b30); border: 1px solid #fff; margin-right: 4px; vertical-align: -1px; }
+
+.table-log { margin-top: 6px; font-size: 12px; color: var(--muted); height: 52px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+.table-log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.table-log .win { color: var(--green); }
+.table-log .hand { color: var(--accent); }
+
+/* ---------- рейтинг ---------- */
+.board-wrap { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.board { width: 100%; border-collapse: collapse; font-size: 12px; }
+.board th { position: sticky; top: 0; background: var(--panel2); text-align: left; padding: 6px 5px; cursor: pointer; white-space: nowrap; user-select: none; z-index: 1; }
+.board th.sorted { color: var(--accent); }
+.board td { padding: 4px 5px; border-top: 1px solid #202a37; white-space: nowrap; }
+.board .num { text-align: right; font-variant-numeric: tabular-nums; }
+.board tr { cursor: pointer; }
+.board tbody tr:hover { background: #1f2937; }
+.board tr.sel { background: #26334a; }
+.board tr.r1 td:first-child { color: #ffd34d; font-weight: 800; }
+.board tr.r2 td:first-child { color: #cfd6e1; font-weight: 800; }
+.board tr.r3 td:first-child { color: #d9955c; font-weight: 800; }
+.pos-n { color: var(--green); }
+.neg-n { color: var(--red); }
+.pill { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: #26303f; color: #c6d0de; }
+.pill.fixed { background: #3a2f1c; color: #ffd28a; }
+.pill.sss { background: #2b3a55; }
+.pill.mss { background: #35365c; }
+.pill.bss { background: #3b2f58; }
+.tdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; background: #3a4656; }
+
+canvas { width: 100%; display: block; background: #121821; border-radius: 8px; border: 1px solid var(--line); }
+.events { max-height: 190px; overflow-y: auto; font-size: 12.5px; }
+.events div { padding: 2px 0; border-bottom: 1px solid #202a37; color: #c2ccda; }
+.events .evolve { color: #9fd2ff; }
+.events .bigpot { color: #ffd479; }
+.events small { color: var(--muted); margin-right: 6px; }
+
+/* ---------- диалоги ---------- */
+.dlg { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; width: min(720px, 94vw); max-height: 90vh; }
+.dlg::backdrop { background: rgba(0,0,0,.65); }
+.dlg-close { position: absolute; right: 12px; top: 10px; margin: 0; }
+.grid-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; margin: 12px 0; }
+.grid-form label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 12px; }
+.grid-form label.check { flex-direction: row; align-items: center; }
+.grid-form .wide { grid-column: 1 / -1; }
+.dlg-actions { display: flex; gap: 10px; }
+.bot-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.bot-head h2 { font-size: 20px; }
+.bot-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+.bot-stat { background: var(--panel2); border-radius: 8px; padding: 6px 10px; }
+.bot-stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+.bot-stat small { color: var(--muted); }
+.genes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; margin-top: 8px; }
+.gene { display: grid; grid-template-columns: 1fr 70px; align-items: center; gap: 8px; font-size: 12px; }
+.gene .bar { height: 5px; background: #26303f; border-radius: 3px; overflow: hidden; margin-top: 2px; }
+.gene .bar i { display: block; height: 100%; background: linear-gradient(90deg, #2a6fdb, #8b5cf6); }
+.gene .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.group-title { grid-column: 1 / -1; margin-top: 8px; color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+
+/* ---------- плотная раскладка для столов 8-10 мест ---------- */
+.table-card.dense { grid-column: 1 / -1; }
+.table-card.dense .felt-wrap { padding-top: 56%; margin-top: 34px; }
+.table-card.dense .seat { width: 17%; min-width: 86px; }
+.table-card.dense .seat .name { font-size: 11px; }
+.table-card.dense .seat .stack { font-size: 11px; }
+.table-card.dense .seat .tag { font-size: 9px; }
+.table-card.dense .card.sm { width: 21px; height: 30px; font-size: 11px; }
+.table-card.dense .card.sm .s { font-size: 11px; }
+
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">♠</span>
+    <div>
+      <h1>Poker Bots Arena</h1>
+      <div class="sub" id="subtitle">NL Hold'em · кеш</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="btnPlay" class="btn primary" title="Пауза / продолжить (пробел)">⏸ Пауза</button>
+    <label class="speed">Скорость
+      <select id="selSpeed">
+        <option value="2">1× медленно</option>
+        <option value="4" selected>2× обычно</option>
+        <option value="8">4× быстро</option>
+        <option value="18">8× очень быстро</option>
+        <option value="45">20×</option>
+        <option value="turbo">Турбо (макс.)</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="chkCards" checked> Карты ботов</label>
+    <button id="btnSettings" class="btn">⚙ Настройки</button>
+    <button id="btnExport" class="btn" title="Скачать рейтинг и гены ботов в JSON">⭳ JSON</button>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><span id="kHands">0</span><small>раздач</small></div>
+    <div class="kpi"><span id="kHps">0</span><small>раздач/сек</small></div>
+    <div class="kpi"><span id="kGen">0</span><small>поколение</small></div>
+    <div class="kpi"><span id="kRake">$0</span><small>рейк</small></div>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="left">
+    <div id="tables" class="tables"></div>
+    <div class="panel">
+      <div class="panel-title">События</div>
+      <div id="events" class="events"></div>
+    </div>
+  </section>
+
+  <aside class="right">
+    <div class="panel">
+      <div class="panel-title">
+        Рейтинг игроков
+        <span class="filters">
+          <select id="selFilter">
+            <option value="all">все</option>
+            <option value="evo">эволюционеры</option>
+            <option value="fixed">фикс. стили</option>
+            <option value="playing">за столами</option>
+          </select>
+          <input id="inpSearch" type="search" placeholder="поиск…">
+        </span>
+      </div>
+      <div class="board-wrap">
+        <table id="board" class="board">
+          <thead>
+            <tr>
+              <th data-sort="rank">#</th>
+              <th data-sort="name">Игрок</th>
+              <th data-sort="style" title="Стиль по статистике (HUD)">Стиль</th>
+              <th data-sort="strategy" title="Стратегия стека: SSS ≤40 ББ, MSS 40–80, BSS 80+">Стек</th>
+              <th data-sort="profit" class="num">Прибыль</th>
+              <th data-sort="bb100" class="num" title="Выигрыш в больших блайндах на 100 рук">bb/100</th>
+              <th data-sort="hands" class="num">Рук</th>
+              <th data-sort="vpip" class="num" title="VPIP / PFR">VPIP/PFR</th>
+              <th data-sort="table" class="num">Стол</th>
+            </tr>
+          </thead>
+          <tbody id="boardBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Прибыль лидеров <small id="chartHint">топ-5 + выбранный бот</small></div>
+      <canvas id="chartProfit" height="170"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Эволюция популяции <small>VPIP / PFR / агрессия по поколениям</small></div>
+      <canvas id="chartEvo" height="150"></canvas>
+    </div>
+  </aside>
+</main>
+
+<!-- Карточка бота -->
+<dialog id="dlgBot" class="dlg">
+  <form method="dialog" class="dlg-close"><button class="btn">✕</button></form>
+  <div id="botBody"></div>
+</dialog>
+
+<!-- Настройки -->
+<dialog id="dlgSettings" class="dlg">
+  <form method="dialog" class="dlg-close"><button class="btn">✕</button></form>
+  <h2>Настройки симуляции</h2>
+  <p class="muted">Изменения применяются при перезапуске: все боты начнут с нуля.</p>
+  <div class="grid-form" id="settingsForm">
+    <label>Ботов <input type="number" id="cfgBots" min="2" max="1000" value="200"></label>
+    <label>Столов <input type="number" id="cfgTables" min="1" max="8" value="3"></label>
+    <label>Игроков за столом <input type="number" id="cfgSeats" min="2" max="10" value="6"></label>
+    <label>Малый блайнд, $ <input type="number" id="cfgSb" min="0.01" step="0.01" value="0.25"></label>
+    <label>Большой блайнд, $ <input type="number" id="cfgBb" min="0.02" step="0.01" value="0.5"></label>
+    <label>Мин. закупка, ББ <input type="number" id="cfgMinBuy" min="5" max="200" value="20"></label>
+    <label>Макс. закупка, ББ <input type="number" id="cfgMaxBuy" min="20" max="500" value="100"></label>
+    <label>Рейк, % <input type="number" id="cfgRake" min="0" max="10" step="0.5" value="3"></label>
+    <label>Лимит рейка, ББ <input type="number" id="cfgRakeCap" min="0" max="10" step="0.5" value="3"></label>
+    <label>Фикс. стили (рыбы и др.), % <input type="number" id="cfgFixed" min="0" max="90" value="25"></label>
+    <label>Раздач на поколение <input type="number" id="cfgGen" min="500" max="100000" step="500" value="4000"></label>
+    <label>Seed (пусто = случайный) <input type="number" id="cfgSeed" placeholder="случайный"></label>
+    <label class="check wide"><input type="checkbox" id="cfgEvo" checked> Включить обучение ботов (эволюция стратегий)</label>
+  </div>
+  <div class="dlg-actions">
+    <button id="btnApply" class="btn primary">▶ Применить и перезапустить</button>
+    <button id="btnDefaults" class="btn">Сбросить значения</button>
+  </div>
+</dialog>
+
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+
+  // Детерминированный ГСЧ (mulberry32): один и тот же seed -> одна и та же симуляция.
+  class RNG {
+    constructor(seed) {
+      this.seed = (seed === undefined || seed === null ? Math.floor(Math.random() * 4294967296) : seed) >>> 0;
+      this.s = this.seed;
+    }
+    next() {
+      let t = (this.s = (this.s + 0x6D2B79F5) | 0);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    int(n) { return Math.floor(this.next() * n); }
+    range(a, b) { return a + (b - a) * this.next(); }
+    chance(p) { return this.next() < p; }
+    pick(arr) { return arr[this.int(arr.length)]; }
+    gauss() {
+      let u = 0;
+      while (u === 0) u = this.next();
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * this.next());
+    }
+    shuffle(a) {
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = this.int(i + 1);
+        const t = a[i]; a[i] = a[j]; a[j] = t;
+      }
+      return a;
+    }
+  }
+
+  NS.RNG = RNG;
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+
+  // Карта = число 0..51. rank = c >> 2 (0 = двойка ... 12 = туз), suit = c & 3.
+  const RANKS = '23456789TJQKA';
+  const SUITS = ['s', 'h', 'd', 'c'];
+  const SUIT_SYMBOL = { s: '♠', h: '♥', d: '♦', c: '♣' };
+
+  const rankOf = (c) => c >> 2;
+  const suitOf = (c) => c & 3;
+  const cardStr = (c) => RANKS[c >> 2] + SUITS[c & 3];
+  const cardPretty = (c) => ({
+    rank: RANKS[c >> 2] === 'T' ? '10' : RANKS[c >> 2],
+    sym: SUIT_SYMBOL[SUITS[c & 3]],
+    red: (c & 3) === 1 || (c & 3) === 2,
+  });
+  const makeDeck = () => { const d = []; for (let i = 0; i < 52; i++) d.push(i); return d; };
+
+  NS.Cards = { RANKS, SUITS, rankOf, suitOf, cardStr, cardPretty, makeDeck };
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+
+  // Оценка лучшей 5-карточной комбинации из 5..7 карт.
+  // Результат - целое число: чем больше, тем сильнее рука. category = floor(score / B5).
+  const B = 13, B5 = 371293;
+  const CATEGORY_NAMES = ['Старшая карта', 'Пара', 'Две пары', 'Сет', 'Стрит', 'Флеш', 'Фулл-хаус', 'Каре', 'Стрит-флеш'];
+
+  // STRAIGHT[mask] = старшая карта стрита в маске рангов (или -1). Колесо A-2-3-4-5 -> 3.
+  const STRAIGHT = new Int8Array(8192).fill(-1);
+  for (let m = 0; m < 8192; m++) {
+    for (let hi = 12; hi >= 4; hi--) {
+      const need = 31 << (hi - 4);
+      if ((m & need) === need) { STRAIGHT[m] = hi; break; }
+    }
+    if (STRAIGHT[m] < 0 && (m & 0x100F) === 0x100F) STRAIGHT[m] = 3;
+  }
+
+  const rc = new Int8Array(13);
+  const sc = new Int8Array(4);
+  const sm = new Int32Array(4);
+
+  function evaluate(cards, n) {
+    rc.fill(0); sc.fill(0); sm.fill(0);
+    let mask = 0;
+    for (let i = 0; i < n; i++) {
+      const c = cards[i], r = c >> 2, s = c & 3;
+      rc[r]++; sc[s]++; sm[s] |= 1 << r; mask |= 1 << r;
+    }
+    let fs = -1;
+    for (let s = 0; s < 4; s++) if (sc[s] >= 5) fs = s;
+    if (fs >= 0) {
+      // из 7 карт флеш несовместим с каре/фулл-хаусом, поэтому можно вернуть сразу
+      const m = sm[fs];
+      const sf = STRAIGHT[m];
+      if (sf >= 0) return 8 * B5 + sf;
+      let val = 0, cnt = 0;
+      for (let r = 12; r >= 0 && cnt < 5; r--) if (m & (1 << r)) { val = val * B + r; cnt++; }
+      return 5 * B5 + val;
+    }
+    let quad = -1, t1 = -1, t2 = -1, p1 = -1, p2 = -1;
+    for (let r = 12; r >= 0; r--) {
+      const k = rc[r];
+      if (k === 4) quad = r;
+      else if (k === 3) { if (t1 < 0) t1 = r; else if (t2 < 0) t2 = r; }
+      else if (k === 2) { if (p1 < 0) p1 = r; else if (p2 < 0) p2 = r; }
+    }
+    if (quad >= 0) {
+      let kick = -1;
+      for (let r = 12; r >= 0; r--) if (r !== quad && rc[r] > 0) { kick = r; break; }
+      return 7 * B5 + quad * B + kick;
+    }
+    if (t1 >= 0 && (t2 >= 0 || p1 >= 0)) {
+      const p = t2 >= 0 ? (p1 > t2 ? p1 : t2) : p1;
+      return 6 * B5 + t1 * B + p;
+    }
+    const st = STRAIGHT[mask];
+    if (st >= 0) return 4 * B5 + st;
+    if (t1 >= 0) {
+      let val = t1, cnt = 0;
+      for (let r = 12; r >= 0 && cnt < 2; r--) if (r !== t1 && rc[r] > 0) { val = val * B + r; cnt++; }
+      return 3 * B5 + val;
+    }
+    if (p2 >= 0) {
+      let kick = 0;
+      for (let r = 12; r >= 0; r--) if (r !== p1 && r !== p2 && rc[r] > 0) { kick = r; break; }
+      return 2 * B5 + (p1 * B + p2) * B + kick;
+    }
+    if (p1 >= 0) {
+      let val = p1, cnt = 0;
+      for (let r = 12; r >= 0 && cnt < 3; r--) if (r !== p1 && rc[r] > 0) { val = val * B + r; cnt++; }
+      return 1 * B5 + val;
+    }
+    let val = 0, cnt = 0;
+    for (let r = 12; r >= 0 && cnt < 5; r--) if (rc[r] > 0) { val = val * B + r; cnt++; }
+    return val;
+  }
+
+  const categoryOf = (score) => (score / B5) | 0;
+  const handName = (score) => {
+    const cat = categoryOf(score);
+    if (cat === 8 && score - 8 * B5 === 12) return 'Роял-флеш';
+    return CATEGORY_NAMES[cat];
+  };
+
+  NS.Evaluator = { evaluate, categoryOf, handName, CATEGORY_NAMES, B5 };
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+
+  // Рейтинг 169 стартовых рук. Берём формулу Чена с поправкой на пары и строим
+  // перцентиль: 0.0 = AA (самая сильная), 1.0 = самая слабая. Перцентиль считается по
+  // количеству комбинаций, поэтому "топ 15% рук" действительно значит 15% из 1326 комбо.
+  const PCT = new Float32Array(13 * 13 * 2);
+
+  function chen(hi, lo, suited) {
+    const val = (r) => (r === 12 ? 10 : r === 11 ? 8 : r === 10 ? 7 : r === 9 ? 6 : (r + 2) / 2);
+    let s = val(hi);
+    if (hi === lo) return Math.max(7, s * 2);
+    if (suited) s += 2;
+    const gap = hi - lo - 1;
+    s -= gap === 0 ? 0 : gap === 1 ? 1 : gap === 2 ? 2 : gap === 3 ? 4 : 5;
+    if (gap <= 1 && hi < 10) s += 1;
+    return Math.ceil(s);
+  }
+
+  (function build() {
+    const classes = [];
+    for (let hi = 0; hi < 13; hi++) {
+      for (let lo = 0; lo <= hi; lo++) {
+        if (hi === lo) {
+          classes.push({ hi, lo, suited: 0, combos: 6, score: chen(hi, lo, 0) });
+        } else {
+          classes.push({ hi, lo, suited: 1, combos: 4, score: chen(hi, lo, 1) });
+          classes.push({ hi, lo, suited: 0, combos: 12, score: chen(hi, lo, 0) });
+        }
+      }
+    }
+    classes.sort((a, b) =>
+      b.score - a.score ||
+      (b.hi === b.lo) - (a.hi === a.lo) ||
+      b.suited - a.suited ||
+      b.hi - a.hi || b.lo - a.lo);
+    let acc = 0;
+    for (const c of classes) {
+      PCT[(c.hi * 13 + c.lo) * 2 + c.suited] = (acc + c.combos / 2) / 1326;
+      acc += c.combos;
+    }
+  })();
+
+  function preflopPct(c1, c2) {
+    const r1 = c1 >> 2, r2 = c2 >> 2;
+    const hi = r1 > r2 ? r1 : r2, lo = r1 > r2 ? r2 : r1;
+    const suited = r1 !== r2 && (c1 & 3) === (c2 & 3) ? 1 : 0;
+    return PCT[(hi * 13 + lo) * 2 + suited];
+  }
+
+  // Руки, которыми удобно блефовать 3-бетом: низкие suited-тузы (блокеры) и suited-коннекторы.
+  function isBluff3betHand(c1, c2) {
+    const r1 = c1 >> 2, r2 = c2 >> 2;
+    if ((c1 & 3) !== (c2 & 3) || r1 === r2) return false;
+    const hi = r1 > r2 ? r1 : r2, lo = r1 > r2 ? r2 : r1;
+    if (hi === 12 && lo <= 3) return true;
+    return hi - lo <= 2 && hi >= 4 && hi <= 10;
+  }
+
+  function handLabel(c1, c2) {
+    const R = '23456789TJQKA';
+    const r1 = c1 >> 2, r2 = c2 >> 2;
+    const hi = r1 > r2 ? r1 : r2, lo = r1 > r2 ? r2 : r1;
+    if (hi === lo) return R[hi] + R[lo];
+    return R[hi] + R[lo] + ((c1 & 3) === (c2 & 3) ? 's' : 'o');
+  }
+
+  NS.Preflop = { preflopPct, isBluff3betHand, handLabel };
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+  const { evaluate, categoryOf } = NS.Evaluator;
+  const { preflopPct } = NS.Preflop;
+
+  // Оценка эквити методом Монте-Карло против диапазонов оппонентов.
+  // opps[i] = { tight, level, bluff }
+  //   tight - доля топ-рук префлопа, которыми оппонент мог дойти до этого места (0..1)
+  //   level - агрессия оппонента на текущей улице: 0 пассив, 1 бет, 2 рейз
+  //   bluff - какая часть "пустых" рук остаётся в его агрессивном диапазоне
+  const scratchHero = new Int8Array(7);
+  const scratchOpp = new Int8Array(7);
+  const scratchBoard = new Int8Array(7);
+  const deckBuf = new Int8Array(52);
+  const oppHole = new Int8Array(24);
+  const runout = new Int8Array(5);
+
+  function acceptHand(c1, c2, opp, board, nb, boardCat, boardSuitCnt, rng) {
+    if (opp.tight < 1) {
+      if (preflopPct(c1, c2) > opp.tight && rng.next() > 0.06) return false;
+    }
+    if (nb >= 3 && opp.level > 0) {
+      for (let i = 0; i < nb; i++) scratchBoard[i] = board[i];
+      scratchBoard[nb] = c1; scratchBoard[nb + 1] = c2;
+      const cat = categoryOf(evaluate(scratchBoard, nb + 2));
+      if (opp.level >= 2) {
+        if (cat >= 2 && cat > boardCat) return true;
+        if (cat > boardCat) return rng.next() < 0.5;
+        return rng.next() < opp.bluff * 0.5;
+      }
+      if (cat > boardCat) return true;
+      // флеш-дро и подобные: для пассивных линий оставляем часть слабых рук
+      if (nb < 5) {
+        const s1 = c1 & 3, s2 = c2 & 3;
+        const same = s1 === s2 ? 2 + boardSuitCnt[s1] : Math.max(1 + boardSuitCnt[s1], 1 + boardSuitCnt[s2]);
+        if (same >= 4) return rng.next() < 0.85;
+      }
+      return rng.next() < opp.bluff;
+    }
+    return true;
+  }
+
+  function estimateEquity(hole, board, opps, samples, rng) {
+    const nb = board.length;
+    const need = 5 - nb;
+    const nOpp = opps.length;
+    if (nOpp === 0) return 1;
+
+    let m = 0;
+    const used = new Uint8Array(52);
+    used[hole[0]] = 1; used[hole[1]] = 1;
+    for (let i = 0; i < nb; i++) used[board[i]] = 1;
+    for (let c = 0; c < 52; c++) if (!used[c]) deckBuf[m++] = c;
+
+    const boardSuitCnt = [0, 0, 0, 0];
+    for (let i = 0; i < nb; i++) boardSuitCnt[board[i] & 3]++;
+    let boardCat = 0;
+    if (nb >= 3) {
+      for (let i = 0; i < nb; i++) scratchBoard[i] = board[i];
+      boardCat = categoryOf(evaluate(scratchBoard, nb));
+    }
+
+    let total = 0;
+    for (let s = 0; s < samples; s++) {
+      let n = m;
+      for (let i = 0; i < nOpp; i++) {
+        let attempts = 0, c1, c2;
+        for (;;) {
+          let idx = (rng.next() * n) | 0;
+          c1 = deckBuf[idx]; deckBuf[idx] = deckBuf[n - 1]; deckBuf[n - 1] = c1; n--;
+          idx = (rng.next() * n) | 0;
+          c2 = deckBuf[idx]; deckBuf[idx] = deckBuf[n - 1]; deckBuf[n - 1] = c2; n--;
+          if (++attempts >= 6 || acceptHand(c1, c2, opps[i], board, nb, boardCat, boardSuitCnt, rng)) break;
+          n += 2;
+        }
+        oppHole[i * 2] = c1; oppHole[i * 2 + 1] = c2;
+      }
+      for (let k = 0; k < need; k++) {
+        const idx = (rng.next() * n) | 0;
+        runout[k] = deckBuf[idx]; deckBuf[idx] = deckBuf[n - 1]; deckBuf[n - 1] = runout[k]; n--;
+      }
+      // рука героя
+      scratchHero[0] = hole[0]; scratchHero[1] = hole[1];
+      let len = 2;
+      for (let i = 0; i < nb; i++) scratchHero[len++] = board[i];
+      for (let k = 0; k < need; k++) scratchHero[len++] = runout[k];
+      const heroScore = evaluate(scratchHero, 7);
+      let lose = false, ties = 0;
+      for (let i = 0; i < nOpp; i++) {
+        scratchOpp[0] = oppHole[i * 2]; scratchOpp[1] = oppHole[i * 2 + 1];
+        let l2 = 2;
+        for (let j = 0; j < nb; j++) scratchOpp[l2++] = board[j];
+        for (let k = 0; k < need; k++) scratchOpp[l2++] = runout[k];
+        const sc = evaluate(scratchOpp, 7);
+        if (sc > heroScore) { lose = true; break; }
+        if (sc === heroScore) ties++;
+      }
+      if (!lose) total += 1 / (ties + 1);
+    }
+    return total / samples;
+  }
+
+  NS.Equity = { estimateEquity };
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+
+  // HUD-статистика игрока (как в Hand2Note / PokerTracker из статьи): то, что видно всем за столом.
+  // Все показатели сглажены априорными значениями, чтобы не прыгать на малой выборке.
+  const FIELDS = ['hands', 'vpip', 'pfr', 'threeBetOpp', 'threeBet', 'agg', 'calls', 'folds',
+    'facedBet', 'foldedToBet', 'cbetOpp', 'cbet', 'sawFlop', 'showdowns', 'wonSd'];
+
+  class Stats {
+    constructor() { this.reset(); }
+    reset() { for (const f of FIELDS) this[f] = 0; }
+    decay(k) { for (const f of FIELDS) this[f] *= k; }
+    get vpipPct() { return (this.vpip + 3) / (this.hands + 12); }
+    get pfrPct() { return (this.pfr + 1.7) / (this.hands + 12); }
+    get afq() { return (this.agg + 3.5) / (this.agg + this.calls + this.folds + 10); }
+    get foldToBetPct() { return (this.foldedToBet + 3.6) / (this.facedBet + 8); }
+    get cbetPct() { return (this.cbet + 3) / (this.cbetOpp + 5); }
+    get threeBetPct() { return (this.threeBet + 0.4) / (this.threeBetOpp + 10); }
+    get wtsdPct() { return (this.showdowns + 1.2) / (this.sawFlop + 5); }
+    get wsdPct() { return (this.wonSd + 1.5) / (this.showdowns + 3); }
+    hud() {
+      return { hands: this.hands, vpip: this.vpipPct, pfr: this.pfrPct, afq: this.afq, foldToBet: this.foldToBetPct };
+    }
+  }
+
+  // Динамическая метка стиля по статистике (как её видели бы оппоненты).
+  function styleLabel(st) {
+    if (st.hands < 40) return 'нет данных';
+    const v = st.vpipPct, p = st.pfrPct, a = st.afq;
+    if (v > 0.42 && p < 0.14) return 'Рыба (станция)';
+    if (v > 0.38 && p > 0.24) return 'Маньяк';
+    if (v < 0.15) return 'Нит';
+    if (v < 0.30 && p / v > 0.62) return a > 0.42 ? 'TAG (агр.)' : 'TAG';
+    if (v >= 0.30 && p > 0.2) return 'LAG';
+    if (p / v < 0.4) return 'Пассив';
+    return 'Регуляр';
+  }
+
+  NS.Stats = Stats;
+  NS.styleLabel = styleLabel;
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+
+  const FIRST = ['Viktor', 'Olena', 'Dmytro', 'Ivan', 'Anna', 'Maksym', 'Sasha', 'Kolya', 'Vlad', 'Taras', 'Oleg', 'Katya',
+    'Andriy', 'Bohdan', 'Yulia', 'Roman', 'Denys', 'Misha', 'Nastya', 'Pavlo', 'Igor', 'Artem', 'Sergiy', 'Marta', 'Lesya',
+    'Alex', 'John', 'Mike', 'Emma', 'Lucas', 'Sofia', 'Noah', 'Liam', 'Mia', 'Jack', 'Oscar', 'Hugo', 'Elena', 'Marco',
+    'Pierre', 'Hans', 'Jan', 'Piotr', 'Tomas', 'Nikita', 'Egor', 'Daria', 'Polina', 'Stas', 'Zhenya', 'Lena', 'Vadim',
+    'Grisha', 'Fedir', 'Yarik', 'Danylo', 'Ostap', 'Lev', 'Rafael', 'Diego', 'Carlos', 'Yuki', 'Kenji', 'Ivo', 'Milan'];
+  const ADJ = ['Lucky', 'Sneaky', 'Silent', 'Crazy', 'Cold', 'Hot', 'Mad', 'Wild', 'Fast', 'Slow', 'Brave', 'Sly', 'Blind',
+    'Royal', 'Iron', 'Golden', 'Dark', 'Neon', 'Turbo', 'Mega', 'Tilted', 'Chill', 'Happy', 'Angry', 'Shy', 'Big', 'Tiny',
+    'Evil', 'Nitro', 'Cosmic', 'Frozen', 'Rusty', 'Lazy', 'Smooth', 'Sharp', 'Steel', 'Shadow', 'Ghost', 'River', 'Flop'];
+  const ANIMAL = ['Fox', 'Wolf', 'Bear', 'Shark', 'Tiger', 'Cobra', 'Falcon', 'Raven', 'Panda', 'Lynx', 'Otter', 'Viper',
+    'Eagle', 'Hawk', 'Moose', 'Badger', 'Gorilla', 'Dragon', 'Phoenix', 'Mantis', 'Rhino', 'Bison', 'Crow', 'Pike', 'Orca',
+    'Jackal', 'Hyena', 'Cat', 'Hamster', 'Whale', 'Fish', 'Donkey', 'Bull', 'Owl', 'Koala'];
+  const SUFFIX = ['AA', 'KK', 'Ace', 'Bluff', 'Nuts', 'AllIn', 'Pro', 'Boss', 'King', 'Queen', 'Joker', 'Dealer', 'Grinder'];
+
+  function generateNames(count, rng) {
+    const used = new Set();
+    const out = [];
+    let guard = 0;
+    while (out.length < count) {
+      let name;
+      switch (rng.int(6)) {
+        case 0: name = rng.pick(FIRST) + '_' + (60 + rng.int(40)); break;
+        case 1: name = rng.pick(ADJ) + rng.pick(FIRST); break;
+        case 2: name = rng.pick(FIRST) + '_' + String.fromCharCode(65 + rng.int(26)); break;
+        case 3: name = rng.pick(ADJ) + '_' + rng.pick(ANIMAL); break;
+        case 4: name = rng.pick(ANIMAL) + rng.int(100); break;
+        default: name = rng.pick(FIRST) + rng.pick(SUFFIX); break;
+      }
+      if (used.has(name)) {
+        if (++guard > 40) { name = name + rng.int(1000); guard = 0; } else continue;
+        if (used.has(name)) continue;
+      }
+      used.add(name);
+      out.push(name);
+    }
+    return out;
+  }
+
+  NS.generateNames = generateNames;
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+
+  // Геном = набор параметров стратегии. Значения по умолчанию - ABC/TAG-покер из статьи:
+  // тайт с ранних позиций, шире на баттоне, value-рейзы сильными руками, логичные блефы.
+  // key, подпись, min, max, значение по умолчанию (TAG), группа
+  const GENE_DEFS = [
+    ['openBase', 'Открытие с UTG (доля рук)', 0.04, 0.45, 0.13, 'Префлоп'],
+    ['posSlope', 'Расширение к баттону', 0.0, 0.45, 0.22, 'Префлоп'],
+    ['openSize', 'Размер открытия (ББ)', 2.0, 4.5, 2.7, 'Префлоп'],
+    ['limpFreq', 'Частота лимпа', 0.0, 0.8, 0.02, 'Префлоп'],
+    ['threeBet', '3-бет на value (доля рук)', 0.01, 0.16, 0.045, 'Префлоп'],
+    ['threeBetBluff', '3-бет блеф (частота)', 0.0, 0.5, 0.08, 'Префлоп'],
+    ['callRaise', 'Колл рейза (доля рук)', 0.02, 0.45, 0.14, 'Префлоп'],
+    ['callPosBonus', 'Бонус колла в позиции/BB', 0.0, 0.3, 0.08, 'Префлоп'],
+    ['fourBet', '4-бет (доля рук)', 0.005, 0.07, 0.02, 'Префлоп'],
+    ['shoveStack', 'Push/fold ниже (ББ)', 5, 25, 12, 'Префлоп'],
+
+    ['cbet', 'C-bet на флопе', 0.1, 1.0, 0.6, 'Постфлоп'],
+    ['valueBet', 'Порог эквити для value-бета', 0.5, 0.85, 0.64, 'Постфлоп'],
+    ['raiseEq', 'Порог эквити для рейза', 0.65, 0.97, 0.82, 'Постфлоп'],
+    ['betSize', 'Размер бета (доля банка)', 0.3, 1.2, 0.6, 'Постфлоп'],
+    ['bigBetSize', 'Размер большого бета', 0.6, 2.0, 0.95, 'Постфлоп'],
+    ['callMargin', 'Запас к пот-оддсам при колле', -0.08, 0.15, 0.02, 'Постфлоп'],
+    ['bluff', 'Частота блефа', 0.0, 0.5, 0.12, 'Постфлоп'],
+    ['semiBluff', 'Частота полу-блефа (дро)', 0.0, 0.9, 0.35, 'Постфлоп'],
+    ['checkRaise', 'Чек-рейз / ловушка', 0.0, 0.5, 0.12, 'Постфлоп'],
+    ['slowplay', 'Слоуплей в позиции', 0.0, 0.5, 0.1, 'Постфлоп'],
+    ['multiwayCaution', 'Осторожность в мультипоте', 0.0, 0.15, 0.05, 'Постфлоп'],
+    ['exploit', 'Использование HUD оппонентов', 0.0, 1.0, 0.6, 'Адаптация'],
+    ['noise', 'Случайность решений', 0.0, 0.2, 0.03, 'Адаптация'],
+
+    ['buyIn', 'Закупка (ББ)', 20, 200, 100, 'Банкролл'],
+    ['sessionLen', 'Рук до перерыва', 50, 600, 250, 'Банкролл'],
+    ['stopLoss', 'Стоп-лосс сессии (ББ)', 20, 150, 70, 'Банкролл'],
+    ['stopWin', 'Стоп-вин сессии (ББ)', 30, 400, 200, 'Банкролл'],
+    ['tableSel', 'Разборчивость в выборе стола', 0.0, 1.0, 0.5, 'Банкролл'],
+  ];
+
+  const GENES = {};
+  const GENE_KEYS = [];
+  for (const [key, label, min, max, def, group] of GENE_DEFS) {
+    GENES[key] = { key, label, min, max, def, group };
+    GENE_KEYS.push(key);
+  }
+
+  const clampGene = (k, v) => Math.min(GENES[k].max, Math.max(GENES[k].min, v));
+
+  function defaultGenome() {
+    const g = {};
+    for (const k of GENE_KEYS) g[k] = GENES[k].def;
+    return g;
+  }
+
+  // Архетипы. EVO - стартовая точка для эволюционирующих ботов (с большим разбросом вокруг TAG).
+  const ARCHETYPES = {
+    TAG: { label: 'TAG (ABC)', ov: {} },
+    NIT: {
+      label: 'Нит',
+      ov: { openBase: 0.07, posSlope: 0.10, threeBet: 0.025, callRaise: 0.06, callPosBonus: 0.03, bluff: 0.02, semiBluff: 0.15, cbet: 0.6, valueBet: 0.7, buyIn: 100, limpFreq: 0 },
+    },
+    LAG: {
+      label: 'LAG',
+      ov: { openBase: 0.20, posSlope: 0.28, openSize: 3.0, threeBet: 0.08, threeBetBluff: 0.25, callRaise: 0.2, cbet: 0.75, bluff: 0.28, semiBluff: 0.65, betSize: 0.7, valueBet: 0.58, raiseEq: 0.78, callMargin: 0.0, buyIn: 100 },
+    },
+    FISH: {
+      label: 'Рыба (станция)',
+      ov: { openBase: 0.13, posSlope: 0.12, limpFreq: 0.6, openSize: 2.2, threeBet: 0.02, threeBetBluff: 0, callRaise: 0.38, callPosBonus: 0.12, fourBet: 0.012, cbet: 0.3, valueBet: 0.72, raiseEq: 0.93, betSize: 0.4, bluff: 0.02, semiBluff: 0.1, callMargin: -0.07, exploit: 0.0, multiwayCaution: 0.0, tableSel: 0.0, stopLoss: 150, sessionLen: 500 },
+    },
+    MANIAC: {
+      label: 'Маньяк',
+      ov: { openBase: 0.42, posSlope: 0.30, openSize: 3.5, threeBet: 0.13, threeBetBluff: 0.5, callRaise: 0.22, cbet: 0.95, bluff: 0.5, semiBluff: 0.9, betSize: 1.0, bigBetSize: 1.5, valueBet: 0.5, raiseEq: 0.7, callMargin: 0.03, exploit: 0.1, tableSel: 0.0, stopLoss: 150 },
+    },
+    ROCK: {
+      label: 'Пассивный рок',
+      ov: { openBase: 0.10, posSlope: 0.05, limpFreq: 0.35, openSize: 2.2, threeBet: 0.03, callRaise: 0.08, cbet: 0.35, valueBet: 0.78, raiseEq: 0.95, betSize: 0.35, bluff: 0, semiBluff: 0.05, callMargin: 0.06, checkRaise: 0.02, slowplay: 0.03 },
+    },
+    EVO: { label: 'Эволюционер', ov: {} },
+  };
+
+  function makeGenome(arch, rng, noise) {
+    const g = defaultGenome();
+    const ov = (ARCHETYPES[arch] || ARCHETYPES.TAG).ov;
+    for (const k in ov) g[k] = ov[k];
+    if (noise > 0) {
+      for (const k of GENE_KEYS) {
+        const d = GENES[k];
+        g[k] = clampGene(k, g[k] + rng.gauss() * noise * (d.max - d.min));
+      }
+    }
+    return g;
+  }
+
+  // Мутация: каждый ген с вероятностью `rate` сдвигается на гауссов шум (sigma - доля диапазона гена).
+  function mutate(genome, rng, rate, sigma) {
+    const g = Object.assign({}, genome);
+    let changed = 0;
+    for (const k of GENE_KEYS) {
+      if (rng.next() < rate) {
+        const d = GENES[k];
+        g[k] = clampGene(k, g[k] + rng.gauss() * sigma * (d.max - d.min));
+        changed++;
+      }
+    }
+    if (!changed) { // хотя бы один ген должен измениться
+      const k = rng.pick(GENE_KEYS), d = GENES[k];
+      g[k] = clampGene(k, g[k] + rng.gauss() * sigma * (d.max - d.min));
+    }
+    return g;
+  }
+
+  function crossover(a, b, rng) {
+    const g = {};
+    for (const k of GENE_KEYS) g[k] = rng.next() < 0.5 ? a[k] : b[k];
+    return g;
+  }
+
+  // Тип стратегии по размеру стека из статьи: SSS (20-40 ББ), MSS (~40-75), BSS (100+).
+  function stackStrategy(genome) {
+    const b = genome.buyIn;
+    return b <= 40 ? 'SSS' : b < 80 ? 'MSS' : 'BSS';
+  }
+
+  NS.Genome = { GENES, GENE_KEYS, ARCHETYPES, defaultGenome, makeGenome, mutate, crossover, clampGene, stackStrategy };
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+  const { preflopPct, isBluff3betHand } = NS.Preflop;
+  const { estimateEquity } = NS.Equity;
+
+  const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const FOLD = { type: 'fold' }, CHECK = { type: 'check' }, CALL = { type: 'call' };
+
+  // Доля рук, которыми разумно шовить при стеке s ББ (приближение к равновесию Нэша для пуш/фолд).
+  const pushPct = (s) => Math.min(1, 1.45 * Math.exp(-0.095 * s));
+
+  class Bot {
+    constructor(id, name, genome, archetype, fixed, rng) {
+      this.id = id;
+      this.name = name;
+      this.genome = genome;
+      this.archetype = archetype;
+      this.fixed = fixed;           // фиксированный архетип не обучается (это "рыба" для эксплуатации)
+      this.rng = rng;
+      this.stats = new NS.Stats();
+
+      // деньги (в центах)
+      this.bankIn = 0;
+      this.cashOut = 0;
+      this.seatRef = null;
+      this.rebuys = 0;
+      this.rake = 0;                // сколько рейка заплатил бот
+
+      // результаты
+      this.hands = 0;
+      this.netBB = 0;               // за всё время, в ББ
+      this.window = { hands: 0, netBB: 0 };   // окно оценки для эволюции
+      this.bigWin = 0;
+      this.generation = 0;
+      this.learnedFrom = null;
+      this.session = { hands: 0, startProfit: 0 };
+      this.waitSince = 0;
+      this.cooldown = 0;
+      this.tableId = -1;
+    }
+
+    get stack() { return this.seatRef ? this.seatRef.stack : 0; }
+    get profit() { return this.cashOut + this.stack - this.bankIn; }
+    // выигрыш в bb/100 с поправкой на малую выборку
+    get bb100() { return (100 * this.netBB) / (this.hands + 200); }
+    get bb100Raw() { return this.hands ? (100 * this.netBB) / this.hands : 0; }
+
+    // ---------------------------------------------------------------- решение
+    decide(v) {
+      const act = v.street === 'preflop' ? this.preflop(v) : this.postflop(v);
+      return act;
+    }
+
+    raiseAction(v, to) {
+      if (!v.canRaise) return v.toCall > 0 ? CALL : CHECK;
+      to = Math.round(to / 5) * 5;
+      if (to < v.minRaiseTo) to = v.minRaiseTo;
+      if (to >= v.maxRaiseTo * 0.78 || v.maxRaiseTo - to < v.bb * 1.2) to = v.maxRaiseTo;
+      return { type: 'raise', to };
+    }
+
+    // ------------------------------------------------------------- ПРЕФЛОП
+    preflop(v) {
+      const g = this.genome, rng = this.rng, bb = v.bb;
+      const hp = clamp(preflopPct(v.hole[0], v.hole[1]) + rng.gauss() * g.noise, 0, 1);
+      const effBB = v.effStack / bb;
+      const pf = v.posFactor;
+      const nR = v.preflop.raises, nL = v.preflop.limpers;
+      const mk = (to) => this.raiseAction(v, to);
+
+      if (nR === 0) {
+        // --- рейза ещё не было
+        if (effBB <= g.shoveStack) {
+          // короткий стек (SSS): пуш/фолд по математике
+          if (v.role === 'BB') return CHECK;
+          const pct = Math.min(1, pushPct(effBB) * (0.45 + 0.55 * pf) * (nL > 0 ? 0.8 : 1));
+          return hp <= pct ? mk(v.maxRaiseTo) : (v.toCall === 0 ? CHECK : FOLD);
+        }
+        const openThr = clamp(g.openBase + g.posSlope * pf, 0.03, 0.85);
+        if (v.role === 'BB') {
+          if (nL > 0 && hp <= openThr * 0.5) return mk((g.openSize + nL) * bb);
+          return CHECK;
+        }
+        if (nL === 0) {
+          if (v.role === 'SB') {
+            const thr = v.heads ? openThr : openThr * 0.9;
+            if (hp <= thr) return mk(g.openSize * bb * (v.heads ? 1 : 1.2));
+            if (!v.heads && hp <= thr + 0.2) return CALL;   // доплатить малый блайнд
+            return FOLD;
+          }
+          if (hp <= openThr) return mk(g.openSize * bb);
+          if (hp <= openThr * (1.35 + 2 * g.limpFreq) && rng.chance(g.limpFreq * 1.25)) return CALL;
+          return FOLD;
+        }
+        // были лимперы: изолируем сильными руками
+        if (hp <= openThr * 0.85) return mk((g.openSize + nL) * bb);
+        if (hp <= openThr * 1.3 && rng.chance(0.3 + g.limpFreq)) return CALL;
+        if (v.role === 'SB' && hp <= openThr * 1.6) return CALL;
+        return FOLD;
+      }
+
+      // --- кто-то уже рейзил
+      const r = v.lastRaiser;
+      const defPfr = 0.10 + 0.20 * (r ? r.posFactor : 0.5);
+      const hudPfr = r && r.hud ? r.hud.pfr : defPfr;
+      const w = lerp(defPfr, hudPfr, g.exploit);
+      const scale = clamp(w / 0.2, 0.45, 2.2);          // насколько широк диапазон рейзера
+      const priceFrac = v.toCall / (v.pot + v.toCall);
+      const ip = pf >= 0.66 && v.role !== 'SB' && v.role !== 'BB';
+      const deep = effBB >= 28;
+
+      // решение "на все деньги": считаем эквити против диапазона рейзера
+      if (v.toCall >= 0.4 * v.stack || effBB <= Math.max(g.shoveStack, 18)) {
+        return this.preflopCommit(v, hp, scale, mk);
+      }
+
+      if (nR === 1) {
+        const tb = g.threeBet * Math.pow(scale, 0.8);
+        let call = (g.callRaise + (ip ? g.callPosBonus : 0) + (v.role === 'BB' ? g.callPosBonus * 1.2 : 0)) * Math.pow(scale, 0.9);
+        call *= clamp(1.35 - priceFrac * 1.6, 0.55, 1.5);
+        const size = v.currentBet * (ip ? 3 : 3.8) + nL * bb;
+        if (hp <= tb) return mk(size);
+        if (deep && hp <= 0.5 && isBluff3betHand(v.hole[0], v.hole[1]) &&
+          rng.chance(g.threeBetBluff * (ip ? 1 : 0.7) * (scale >= 0.9 ? 1 : 0.6))) return mk(size);
+        if (hp <= call) return CALL;
+        return FOLD;
+      }
+
+      // 3-бет и выше
+      const iRaised = v.preflop.myRaises > 0;
+      const t4 = g.fourBet * Math.pow(scale, 0.6) * (nR >= 3 ? 0.5 : 1);
+      const callT = (iRaised ? (g.callRaise * 0.4 + g.fourBet * 1.4) * (ip ? 1.3 : 1) : g.fourBet * 1.1) *
+        Math.pow(scale, 0.7) * (nR >= 3 ? 0.55 : 1);
+      if (hp <= t4) return mk(v.currentBet * 2.3);
+      if (hp <= callT) return CALL;
+      if (deep && nR === 2 && hp <= 0.3 && isBluff3betHand(v.hole[0], v.hole[1]) &&
+        rng.chance(g.threeBetBluff * 0.3)) return mk(v.currentBet * 2.3);
+      return FOLD;
+    }
+
+    preflopCommit(v, hp, scale, mk) {
+      const g = this.genome, rng = this.rng;
+      const profs = [];
+      const r = v.lastRaiser;
+      for (const o of v.opponents) {
+        let tight;
+        if (r && o.seat === r.seat) {
+          const base = 0.12 + 0.2 * o.posFactor;
+          tight = lerp(base, o.hud.pfr, g.exploit);
+          if (v.preflop.raises >= 2) tight *= 0.55;
+          const effBB = v.effStack / v.bb;
+          if (o.allIn && effBB <= 15) tight = Math.max(tight, pushPct(effBB) * 0.8);
+        } else tight = 0.3;
+        profs.push({ tight: clamp(tight, 0.04, 1), level: 0, bluff: 0.3 });
+      }
+      const eq = estimateEquity(v.hole, [], profs, 330, rng);
+      const odds = v.toCall / (v.pot + v.toCall);
+      const need = odds + 0.015 + g.callMargin * 0.5 + 0.01 * (profs.length - 1);
+      if (v.canRaise && hp <= Math.min(g.threeBet * 1.3, 0.09) && eq > 0.55) return mk(v.maxRaiseTo);
+      if (eq >= need) return CALL;
+      return FOLD;
+    }
+
+    // ------------------------------------------------------------- ПОСТФЛОП
+    oppProfile(o, v) {
+      const g = this.genome, h = o.hud, ex = g.exploit;
+      let tight;
+      if (o.pfAction === 'raise') {
+        tight = lerp(0.12 + 0.2 * o.posFactor, h.pfr, ex);
+        if (o.pfRaises >= 2) tight *= 0.5;
+      } else if (o.pfAction === 'call') {
+        tight = lerp(0.26, clamp(h.vpip - 0.4 * h.pfr, 0.1, 0.65), ex);
+      } else {
+        tight = lerp(0.6, clamp(h.vpip + 0.25, 0.3, 1), ex);
+      }
+      const bluff = clamp(0.2 + (h.afq - 0.35) * 0.9, 0.1, 0.55) * ex + 0.3 * (1 - ex);
+      return { tight: clamp(tight, 0.04, 1), level: o.streetAgg, bluff };
+    }
+
+    foldProb(o) {
+      const f = lerp(0.45, o.hud.foldToBet, this.genome.exploit);
+      return clamp(f * (o.streetAgg ? 0.6 : 1), 0.05, 0.9);
+    }
+
+    betPot(v, frac) {
+      let amt = v.pot * frac * (0.9 + this.rng.next() * 0.2);
+      if (amt < v.bb) amt = v.bb;
+      return this.raiseAction(v, v.bet + amt);
+    }
+
+    raiseVsBet(v, rf) {
+      const inc = Math.max(v.minRaiseTo - v.currentBet, (v.pot + v.toCall) * rf);
+      return this.raiseAction(v, v.currentBet + inc);
+    }
+
+    postflop(v) {
+      const g = this.genome, rng = this.rng;
+      const opps = v.opponents, nOpp = opps.length;
+      const profs = new Array(nOpp);
+      for (let i = 0; i < nOpp; i++) profs[i] = this.oppProfile(opps[i], v);
+
+      const base = v.street === 'flop' ? 150 : v.street === 'turn' ? 190 : 230;
+      let eq = estimateEquity(v.hole, v.board, profs, nOpp > 2 ? Math.round(base * 0.8) : base, rng);
+      eq += (v.inPosition ? 0.012 : -0.025) + rng.gauss() * g.noise * 0.5;
+
+      const pot = v.pot, toCall = v.toCall;
+      const mw = Math.max(0, nOpp - 1);
+      const vb = g.valueBet + g.multiwayCaution * mw;
+      const rEq = g.raiseEq + g.multiwayCaution * mw * 1.2;
+      let allFold = 1;
+      for (let i = 0; i < nOpp; i++) allFold *= this.foldProb(opps[i]);
+      const spr = v.stack / Math.max(pot, 1);
+
+      if (toCall === 0) {
+        if (!v.canRaise) return CHECK;
+        if (eq >= vb) {
+          if (eq >= 0.9 && v.street === 'flop' && nOpp <= 2 && rng.chance(v.inPosition ? g.slowplay : g.checkRaise)) return CHECK;
+          if (!v.inPosition && eq < 0.85 && rng.chance(g.checkRaise * 0.4)) return CHECK;
+          return this.betPot(v, eq > 0.85 ? g.bigBetSize : g.betSize);
+        }
+        // c-bet: мы были агрессором на префлопе
+        if (v.street === 'flop' && v.preflop.aggressorId === this.id && nOpp <= 2) {
+          const p = g.cbet * (nOpp === 1 ? 1 : 0.55) * (0.55 + 0.9 * allFold);
+          if (rng.chance(clamp(p, 0, 1))) return this.betPot(v, g.betSize * 0.8);
+        }
+        // полу-блеф с дро
+        if (v.street !== 'river' && eq >= 0.27 && nOpp <= 2 &&
+          rng.chance(g.semiBluff * (v.inPosition ? 1 : 0.65))) return this.betPot(v, g.betSize);
+        // чистый блеф: только если вероятность общего фолда оправдывает ставку
+        const breakeven = g.betSize / (1 + g.betSize);
+        if (nOpp <= 2 && eq < 0.3 && allFold >= breakeven - 0.05 - 0.1 * (1 - g.exploit) &&
+          rng.chance(g.bluff * (v.inPosition ? 1 : 0.6) * (v.street === 'river' ? 1.3 : 0.8))) return this.betPot(v, g.betSize);
+        return CHECK;
+      }
+
+      // --- нам сделали ставку
+      const odds = toCall / (pot + toCall);
+      const need = odds + g.callMargin + (v.street === 'river' ? 0.01 : 0) + 0.01 * mw;
+      if (v.canRaise) {
+        if (eq >= rEq && !(v.street === 'flop' && rng.chance(g.slowplay * 0.5))) return this.raiseVsBet(v, g.betSize + 0.2);
+        if (!v.inPosition && eq >= rEq - 0.1 && rng.chance(g.checkRaise)) return this.raiseVsBet(v, g.betSize + 0.2);
+        if (v.street !== 'river' && nOpp === 1 && eq >= 0.3 && eq < need + 0.05 &&
+          rng.chance(g.semiBluff * 0.25 * clamp(spr / 2, 0.3, 1.2))) return this.raiseVsBet(v, g.betSize + 0.2);
+        if (nOpp === 1 && eq < 0.25 && allFold > 0.55 && rng.chance(g.bluff * 0.22)) return this.raiseVsBet(v, g.betSize + 0.2);
+      }
+      if (eq >= need) return CALL;
+      return FOLD;
+    }
+  }
+
+  NS.Bot = Bot;
+  NS.pushPct = pushPct;
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+  const { makeDeck } = NS.Cards;
+  const { evaluate, handName } = NS.Evaluator;
+
+  const MAX_RAISES = 6;   // максимум рейзов на улице
+  const hole7 = new Int8Array(7);
+
+  // Все деньги - в центах (целые числа), чтобы не накапливать ошибки округления.
+  class Table {
+    constructor(id, cfg, rng, hooks) {
+      this.id = id;
+      this.cfg = cfg;
+      this.rng = rng;
+      this.hooks = hooks || {};
+      this.seats = new Array(cfg.seats).fill(null);
+      this.button = -1;
+      this.handNo = 0;
+      this.phase = 'waiting';       // waiting | betting | dealing | showdown | ended
+      this.street = 'preflop';
+      this.board = [];
+      this.pot = 0;                 // банк, собранный с прошлых улиц
+      this.history = [];
+      this.log = [];
+      this.lastCost = 0.5;
+      this.rakeTotal = 0;
+      this.handsPlayed = 0;
+      this.lastHand = null;
+      this.toAct = -1;
+      this.currentBet = 0;
+      this.lastRaiseSize = cfg.bb;
+      this.raiseCount = 0;
+      this.pf = { raises: 0, limpers: 0, aggressorSeat: -1, lastRaiserSeat: -1, openerSeat: -1 };
+      this.flopBetMade = false;
+      this.flopSeen = false;
+      this.postOrder = [];
+    }
+
+    // ---------------------------------------------------------- рассадка
+    occupied() { let n = 0; for (const s of this.seats) if (s) n++; return n; }
+    freeSeatIndexes() { const r = []; this.seats.forEach((s, i) => { if (!s) r.push(i); }); return r; }
+
+    sit(bot, idx, amount) {
+      const seat = {
+        idx, bot, stack: amount, bet: 0, committed: 0, inHand: false, folded: true, allIn: false,
+        hole: [], hasActed: false, raiseLocked: false, lastAction: '', role: '', position: '', posFactor: 0.5,
+        vpipF: false, pfrF: false, pfAct: 'blind', pfRaises: 0, streetAgg: 0, prevAgg: 0,
+        result: 0, win: 0, handText: '', show: false, sawFlop: false,
+      };
+      this.seats[idx] = seat;
+      bot.bankIn += amount;
+      bot.seatRef = seat;
+      bot.tableId = this.id;
+      return seat;
+    }
+
+    unsit(idx) {
+      const seat = this.seats[idx];
+      if (!seat) return;
+      seat.bot.cashOut += seat.stack;
+      seat.bot.seatRef = null;
+      seat.bot.tableId = -1;
+      this.seats[idx] = null;
+    }
+
+    addChips(seat, amount) { seat.stack += amount; seat.bot.bankIn += amount; seat.bot.rebuys++; }
+
+    // ------------------------------------------------------------ шаги
+    step() {
+      switch (this.phase) {
+        case 'waiting':
+          if (this.tryStart()) { this.lastCost = 1.2; return true; }
+          this.lastCost = 0.4;
+          return false;
+        case 'betting': this.playAction(); return true;
+        case 'dealing': this.dealStreet(); return true;
+        case 'showdown': this.showdown(); return true;
+        case 'ended': this.phase = 'waiting'; this.lastCost = 0.5; return true;
+        default: return false;
+      }
+    }
+
+    nextInHand(from) {
+      const n = this.seats.length;
+      for (let k = 1; k <= n; k++) {
+        const j = (from + k) % n, s = this.seats[j];
+        if (s && s.inHand) return j;
+      }
+      return -1;
+    }
+
+    tryStart() {
+      if (this.hooks.beforeHand) this.hooks.beforeHand(this);
+      const ready = [];
+      this.seats.forEach((s, i) => { if (s && s.stack > 0) ready.push(i); });
+      if (ready.length < 2) return false;
+      this.startHand();
+      return true;
+    }
+
+    startHand() {
+      const cfg = this.cfg, n = this.seats.length;
+      this.handNo++;
+      this.board = []; this.pot = 0; this.history = [];
+      this.street = 'preflop'; this.flopBetMade = false; this.flopSeen = false;
+      this.lastHand = null;
+      for (const s of this.seats) {
+        if (!s) continue;
+        s.inHand = s.stack > 0; s.folded = !s.inHand; s.allIn = false;
+        s.bet = 0; s.committed = 0; s.hole = []; s.hasActed = false; s.raiseLocked = false;
+        s.lastAction = ''; s.vpipF = false; s.pfrF = false; s.pfAct = 'blind'; s.pfRaises = 0;
+        s.streetAgg = 0; s.prevAgg = 0; s.result = 0; s.win = 0; s.handText = ''; s.show = false; s.sawFlop = false;
+        s.role = ''; s.position = '';
+      }
+      // кнопка
+      if (this.button < 0 || !this.seats[this.button]) this.button = this.button < 0 ? n - 1 : this.button;
+      this.button = this.nextInHand(this.button);
+      // порядок после кнопки: SB, BB, UTG ... BTN
+      const order = [];
+      for (let k = 1; k <= n; k++) {
+        const j = (this.button + k) % n;
+        if (this.seats[j] && this.seats[j].inHand) order.push(j);
+      }
+      const np = order.length;
+      this.nDealt = np;
+      this.postOrder = order.slice();
+      let sb, bb;
+      if (np === 2) { sb = this.button; bb = order.find((j) => j !== this.button); }
+      else { sb = order[0]; bb = order[1]; }
+      this.sbSeat = sb; this.bbSeat = bb;
+      this.assignPositions(order, sb, bb);
+
+      this.deck = this.rng.shuffle(makeDeck());
+      for (const j of order) {
+        const s = this.seats[j];
+        s.hole = [this.deck.pop(), this.deck.pop()];
+        s.bot.stats.hands++;
+      }
+      this.postBlind(sb, cfg.sb, 'SB');
+      this.postBlind(bb, cfg.bb, 'BB');
+      this.currentBet = Math.max(this.seats[sb].bet, this.seats[bb].bet);
+      this.lastRaiseSize = cfg.bb;
+      this.raiseCount = 0;
+      this.pf = { raises: 0, limpers: 0, aggressorSeat: -1, lastRaiserSeat: -1, openerSeat: -1 };
+      this.phase = 'betting';
+      this.addLog(`Раздача #${this.handNo}`, 'hand');
+      const first = np === 2 ? sb : order[2 % np];
+      this.toAct = -1;
+      const s0 = this.seats[first];
+      if (s0 && !s0.folded && !s0.allIn) this.toAct = first;
+      else this.toAct = this.nextActor(first);
+      if (this.toAct < 0) this.endBettingRound();
+    }
+
+    assignPositions(order, sb, bb) {
+      const np = order.length;
+      const nonBlind = order.filter((j) => j !== sb && j !== bb);
+      const nb = nonBlind.length;
+      // нонБлайнд идут в порядке: UTG ... BTN
+      nonBlind.forEach((j, i) => {
+        const s = this.seats[j];
+        const d = nb - 1 - i;   // расстояние от баттона назад: 0 = BTN
+        s.position = d === 0 ? 'BTN' : d === 1 ? 'CO' : d === 2 ? 'HJ' : d === nb - 1 ? 'UTG' : d === nb - 2 ? 'UTG+1' : 'MP';
+        s.posFactor = nb > 1 ? 1 - d / (nb - 1) : 1;   // BTN = 1, самая ранняя позиция = 0
+        s.role = s.position;
+      });
+      const sbS = this.seats[sb], bbS = this.seats[bb];
+      if (np === 2) {
+        sbS.position = 'BTN/SB'; sbS.role = 'SB'; sbS.posFactor = 1;
+      } else {
+        sbS.position = 'SB'; sbS.role = 'SB'; sbS.posFactor = 0.75;
+      }
+      bbS.position = 'BB'; bbS.role = 'BB'; bbS.posFactor = 0.5;
+    }
+
+    postBlind(idx, amount, label) {
+      const s = this.seats[idx];
+      const a = Math.min(amount, s.stack);
+      s.stack -= a; s.bet = a; s.committed = a;
+      if (s.stack === 0) s.allIn = true;
+      s.lastAction = label + ' ' + this.money(a);
+      this.history.push({ street: 'preflop', seat: idx, id: s.bot.id, action: 'post', amount: a, to: a });
+    }
+
+    money(c) { return '$' + (c / 100).toFixed(2); }
+
+    addLog(text, kind) {
+      this.log.push({ text, kind: kind || 'act', hand: this.handNo });
+      if (this.log.length > 60) this.log.splice(0, this.log.length - 60);
+    }
+
+    // ----------------------------------------------------------- торги
+    minRaiseTo() { return this.currentBet + this.lastRaiseSize; }
+
+    canRaiseSeat(s) {
+      if (s.raiseLocked || this.raiseCount >= MAX_RAISES) return false;
+      if (s.stack <= this.currentBet - s.bet) return false;
+      for (const o of this.seats) {
+        if (o && o !== s && o.inHand && !o.folded && !o.allIn) return true;
+      }
+      return false;
+    }
+
+    nextActor(from) {
+      const n = this.seats.length;
+      let can = 0, only = null;
+      for (const s of this.seats) {
+        if (s && s.inHand && !s.folded && !s.allIn) { can++; only = s; }
+      }
+      if (can === 0) return -1;
+      if (can === 1 && only.bet >= this.currentBet) return -1;
+      for (let k = 1; k <= n; k++) {
+        const j = (from + k) % n, s = this.seats[j];
+        if (s && s.inHand && !s.folded && !s.allIn && (!s.hasActed || s.bet < this.currentBet)) return j;
+      }
+      return -1;
+    }
+
+    buildView(idx) {
+      const s = this.seats[idx], cfg = this.cfg;
+      const toCall = Math.min(this.currentBet - s.bet, s.stack);
+      let pot = this.pot;
+      const players = [], opponents = [];
+      let activeCount = 0, maxOppTotal = 0, nDealt = 0, facingAllIn = false;
+      for (let i = 0; i < this.seats.length; i++) {
+        const p = this.seats[i];
+        if (!p || !p.inHand) continue;
+        nDealt++;
+        pot += p.bet;
+        const st = p.bot.stats;
+        const info = {
+          seat: i, id: p.bot.id, name: p.bot.name, stack: p.stack, bet: p.bet, committed: p.committed,
+          folded: p.folded, allIn: p.allIn, position: p.position, posFactor: p.posFactor, role: p.role,
+          hasActed: p.hasActed, pfAction: p.pfAct, pfRaises: p.pfRaises, streetAgg: p.streetAgg, prevAgg: p.prevAgg,
+          hud: { hands: st.hands, vpip: st.vpipPct, pfr: st.pfrPct, afq: st.afq, foldToBet: st.foldToBetPct },
+        };
+        players.push(info);
+        if (!p.folded) {
+          activeCount++;
+          if (i !== idx) {
+            opponents.push(info);
+            maxOppTotal = Math.max(maxOppTotal, p.stack + p.bet);
+            if (p.allIn && p.bet >= this.currentBet) facingAllIn = true;
+          }
+        }
+      }
+      // позиция постфлоп: мы последние среди оставшихся?
+      let inPosition = true;
+      const myOrd = this.postOrder.indexOf(idx);
+      for (const o of opponents) {
+        if (this.postOrder.indexOf(o.seat) > myOrd) { inPosition = false; break; }
+      }
+      const lastRaiser = this.pf.lastRaiserSeat >= 0
+        ? opponents.find((o) => o.seat === this.pf.lastRaiserSeat) || null : null;
+      const agg = this.pf.aggressorSeat >= 0 ? this.seats[this.pf.aggressorSeat] : null;
+      return {
+        handNo: this.handNo, street: this.street, hole: s.hole.slice(), board: this.board.slice(),
+        pot, bb: cfg.bb, sb: cfg.sb, toCall, currentBet: this.currentBet,
+        minRaiseTo: Math.min(this.minRaiseTo(), s.bet + s.stack), maxRaiseTo: s.bet + s.stack,
+        canRaise: this.canRaiseSeat(s),
+        stack: s.stack, bet: s.bet, committed: s.committed,
+        seat: idx, position: s.position, posFactor: s.posFactor, role: s.role,
+        heads: nDealt === 2, nDealt, numActive: activeCount, inPosition,
+        players, opponents, history: this.history, button: this.button,
+        preflop: {
+          raises: this.pf.raises, limpers: this.pf.limpers, myRaises: s.pfRaises,
+          aggressorSeat: this.pf.aggressorSeat, aggressorId: agg ? agg.bot.id : -1,
+        },
+        lastRaiser,
+        effStack: Math.min(s.stack + s.bet, maxOppTotal || s.stack + s.bet),
+        facingAllIn,
+      };
+    }
+
+    playAction() {
+      const idx = this.toAct;
+      const s = this.seats[idx];
+      let dec;
+      try { dec = s.bot.decide(this.buildView(idx)); } catch (e) { dec = { type: 'fold' }; if (this.cfg.debug) throw e; }
+      this.applyAction(idx, dec || { type: 'fold' });
+      this.lastCost = 1;
+    }
+
+    applyAction(idx, dec) {
+      const s = this.seats[idx], st = s.bot.stats;
+      const toCallRaw = this.currentBet - s.bet;
+      const pre = this.street === 'preflop';
+      let type = dec.type, to = dec.to;
+      const maxTo = s.bet + s.stack;
+
+      if (type === 'check' && toCallRaw > 0) type = 'fold';
+      if (type === 'fold' && toCallRaw <= 0) type = 'check';
+      if (type === 'raise') {
+        if (!this.canRaiseSeat(s)) type = toCallRaw > 0 ? 'call' : 'check';
+        else {
+          if (to === undefined || Number.isNaN(to)) to = this.minRaiseTo();
+          to = Math.round(to);
+          const minTo = this.minRaiseTo();
+          if (to >= maxTo) to = maxTo;
+          else if (to < minTo) to = Math.min(minTo, maxTo);
+          if (to <= this.currentBet) type = toCallRaw > 0 ? 'call' : 'check';
+        }
+      }
+
+      // --- статистика (до применения)
+      if (pre) {
+        if (this.pf.raises === 1 && s.pfRaises === 0 && (type === 'call' || type === 'fold' || type === 'raise')) {
+          st.threeBetOpp++; if (type === 'raise') st.threeBet++;
+        }
+      } else if (toCallRaw > 0) {
+        st.facedBet++;
+        if (type === 'fold') st.foldedToBet++;
+      }
+      if (!pre && this.street === 'flop' && !this.flopBetMade && toCallRaw === 0 &&
+        this.pf.aggressorSeat === idx && (type === 'check' || type === 'raise')) {
+        st.cbetOpp++; if (type === 'raise') st.cbet++;
+      }
+
+      let text = '', histAction = type, amountPut = 0;
+      if (type === 'fold') {
+        s.folded = true;
+        text = 'Fold';
+        if (!pre) st.folds++;
+      } else if (type === 'check') {
+        text = 'Check';
+      } else if (type === 'call') {
+        const a = Math.min(toCallRaw, s.stack);
+        s.stack -= a; s.bet += a; s.committed += a; amountPut = a;
+        if (s.stack === 0) s.allIn = true;
+        text = (s.allIn ? 'All-in ' : 'Call ') + this.money(s.bet);
+        if (pre) {
+          s.vpipF = true;
+          if (s.pfAct !== 'raise') s.pfAct = 'call';
+          if (this.pf.raises === 0) this.pf.limpers++;
+        } else st.calls++;
+      } else { // raise / bet
+        const wasBet = this.currentBet > 0;
+        const a = to - s.bet;
+        s.stack -= a; s.bet = to; s.committed += a; amountPut = a;
+        if (s.stack === 0) s.allIn = true;
+        const raiseSize = to - this.currentBet;
+        const full = raiseSize >= this.lastRaiseSize;
+        this.currentBet = to;
+        if (full) {
+          this.lastRaiseSize = raiseSize;
+          for (const o of this.seats) { if (o && o !== s) { o.hasActed = false; o.raiseLocked = false; } }
+        } else {
+          for (const o of this.seats) { if (o && o !== s && o.hasActed) o.raiseLocked = true; }
+        }
+        this.raiseCount++;
+        histAction = wasBet ? 'raise' : 'bet';
+        text = (s.allIn ? 'All-in ' : (wasBet || pre ? 'Raise to ' : 'Bet ')) + this.money(to);
+        if (pre) {
+          this.pf.raises++;
+          if (this.pf.openerSeat < 0) this.pf.openerSeat = idx;
+          this.pf.lastRaiserSeat = idx; this.pf.aggressorSeat = idx;
+          s.pfrF = true; s.vpipF = true; s.pfAct = 'raise'; s.pfRaises++;
+        } else {
+          st.agg++;
+          s.streetAgg = Math.max(s.streetAgg, wasBet ? 2 : 1);
+          if (this.street === 'flop') this.flopBetMade = true;
+        }
+      }
+      s.hasActed = true;
+      s.lastAction = text;
+      this.history.push({ street: this.street, seat: idx, id: s.bot.id, action: histAction, amount: amountPut, to: s.bet });
+      this.addLog(`${s.bot.name}: ${text}`, 'act');
+
+      // --- что дальше
+      const alive = [];
+      for (const o of this.seats) if (o && o.inHand && !o.folded) alive.push(o);
+      if (alive.length === 1) { this.finishUncontested(alive[0]); return; }
+      const next = this.nextActor(idx);
+      if (next >= 0) this.toAct = next;
+      else this.endBettingRound();
+    }
+
+    endBettingRound() {
+      for (const s of this.seats) {
+        if (!s || !s.inHand) continue;
+        this.pot += s.bet; s.bet = 0;
+        s.hasActed = false; s.raiseLocked = false;
+        s.prevAgg = Math.max(s.prevAgg, s.streetAgg); s.streetAgg = 0;
+        if (!s.folded && !s.allIn) s.lastAction = s.lastAction.startsWith('Fold') ? s.lastAction : '';
+      }
+      this.currentBet = 0; this.lastRaiseSize = this.cfg.bb; this.raiseCount = 0;
+      this.toAct = -1;
+      this.phase = this.street === 'river' ? 'showdown' : 'dealing';
+      this.lastCost = 0.8;
+    }
+
+    dealStreet() {
+      this.deck.pop(); // burn
+      if (this.street === 'preflop') {
+        this.board.push(this.deck.pop(), this.deck.pop(), this.deck.pop());
+        this.street = 'flop'; this.flopSeen = true;
+        for (const s of this.seats) if (s && s.inHand && !s.folded) { s.sawFlop = true; s.bot.stats.sawFlop++; }
+      } else if (this.street === 'flop') { this.board.push(this.deck.pop()); this.street = 'turn'; }
+      else if (this.street === 'turn') { this.board.push(this.deck.pop()); this.street = 'river'; }
+      for (const s of this.seats) if (s && s.inHand && !s.folded && !s.allIn) s.lastAction = '';
+      this.lastCost = 1.5;
+      let can = 0, last = -1;
+      this.seats.forEach((s, i) => { if (s && s.inHand && !s.folded && !s.allIn) { can++; last = i; } });
+      if (can >= 2) {
+        const first = this.nextActor(this.button);
+        if (first >= 0) { this.toAct = first; this.phase = 'betting'; return; }
+      }
+      this.phase = this.street === 'river' ? 'showdown' : 'dealing';
+    }
+
+    // ------------------------------------------------------- расчёт банка
+    rakeFor(contested) {
+      if (!this.flopSeen || this.cfg.rakePct <= 0) return 0;
+      return Math.min(Math.floor(contested * this.cfg.rakePct), this.cfg.rakeCap);
+    }
+
+    finishUncontested(winner) {
+      for (const s of this.seats) if (s && s.inHand) { this.pot += s.bet; s.bet = 0; }
+      let maxOther = 0;
+      for (const s of this.seats) if (s && s.inHand && s !== winner) maxOther = Math.max(maxOther, s.committed);
+      const uncalled = Math.max(0, winner.committed - maxOther);
+      const contested = this.pot - uncalled;
+      const rake = this.rakeFor(contested);
+      const payouts = new Map();
+      payouts.set(winner.idx, this.pot - rake);
+      winner.handText = 'Все сбросили';
+      this.settle(payouts, rake, false);
+    }
+
+    buildPots() {
+      const contribs = [], live = [];
+      for (const s of this.seats) {
+        if (!s || !s.inHand || s.committed <= 0) continue;
+        contribs.push(s);
+        if (!s.folded) live.push(s);
+      }
+      const levels = [...new Set(live.map((s) => s.committed))].sort((a, b) => a - b);
+      const pots = [];
+      let prev = 0;
+      for (const L of levels) {
+        let amount = 0;
+        const owners = new Set();
+        for (const s of contribs) {
+          const part = Math.min(s.committed, L) - Math.min(s.committed, prev);
+          if (part > 0) { amount += part; owners.add(s); }
+        }
+        const eligible = live.filter((s) => s.committed >= L);
+        if (amount > 0) {
+          const refund = eligible.length === 1 && owners.size === 1 && owners.has(eligible[0]);
+          pots.push({ amount, eligible, refund });
+        }
+        prev = L;
+      }
+      const top = levels.length ? levels[levels.length - 1] : 0;
+      let extra = 0;
+      for (const s of contribs) if (s.folded && s.committed > top) extra += s.committed - top;
+      if (extra && pots.length) pots[pots.length - 1].amount += extra;
+      return pots;
+    }
+
+    showdown() {
+      const live = this.seats.filter((s) => s && s.inHand && !s.folded);
+      const scores = new Map();
+      for (const s of live) {
+        hole7[0] = s.hole[0]; hole7[1] = s.hole[1];
+        for (let i = 0; i < 5; i++) hole7[2 + i] = this.board[i];
+        const sc = evaluate(hole7, 7);
+        scores.set(s, sc);
+        s.show = true; s.handText = handName(sc);
+        s.bot.stats.showdowns++;
+      }
+      const pots = this.buildPots();
+      let contested = 0;
+      for (const p of pots) if (!p.refund) contested += p.amount;
+      const rake = this.rakeFor(contested);
+      let rakeLeft = rake;
+      const payouts = new Map();
+      const add = (s, a) => payouts.set(s.idx, (payouts.get(s.idx) || 0) + a);
+      // порядок "слева от баттона" для разбора нечётных центов
+      const orderIdx = (s) => (this.postOrder.indexOf(s.idx));
+      for (const p of pots) {
+        if (p.refund) { add(p.eligible[0], p.amount); continue; }
+        if (rakeLeft > 0) { const take = Math.min(rakeLeft, p.amount); p.amount -= take; rakeLeft -= take; }
+        let best = -1, winners = [];
+        for (const s of p.eligible) {
+          const sc = scores.get(s);
+          if (sc > best) { best = sc; winners = [s]; } else if (sc === best) winners.push(s);
+        }
+        winners.sort((a, b) => orderIdx(a) - orderIdx(b));
+        const share = Math.floor(p.amount / winners.length);
+        let rem = p.amount - share * winners.length;
+        for (const w of winners) { add(w, share + (rem > 0 ? 1 : 0)); if (rem > 0) rem--; }
+      }
+      this.settle(payouts, rake, true);
+    }
+
+    settle(payouts, rake, showdown) {
+      const bb = this.cfg.bb;
+      const winners = [];
+      let totalPot = 0;
+      for (const s of this.seats) {
+        if (!s || !s.inHand) continue;
+        totalPot += s.committed;
+        const win = payouts.get(s.idx) || 0;
+        s.stack += win; s.win = win; s.result = win - s.committed;
+        if (win > 0) {
+          winners.push({ seat: s.idx, name: s.bot.name, amount: win, hand: s.handText });
+          if (showdown) s.bot.stats.wonSd++;
+        }
+        const st = s.bot.stats;
+        if (s.vpipF) st.vpip++;
+        if (s.pfrF) st.pfr++;
+        const b = s.bot;
+        b.hands++; b.netBB += s.result / bb;
+        b.window.hands++; b.window.netBB += s.result / bb;
+        b.session.hands++;
+        if (s.result > b.bigWin) b.bigWin = s.result;
+      }
+      // рейк относим к игрокам пропорционально вкладу в банк
+      if (rake > 0 && totalPot > 0) {
+        for (const s of this.seats) if (s && s.inHand) s.bot.rake += rake * (s.committed / totalPot);
+      }
+      this.rakeTotal += rake;
+      this.handsPlayed++;
+      this.lastHand = { no: this.handNo, board: this.board.slice(), winners, pot: totalPot, rake, showdown };
+      if (winners.length) {
+        const w = winners.map((x) => `${x.name} +${this.money(x.amount)}${x.hand ? ' (' + x.hand + ')' : ''}`).join(', ');
+        this.addLog(w, 'win');
+      }
+      this.phase = 'ended';
+      this.lastCost = showdown ? 2.5 : 1.8;
+      if (this.hooks.afterHand) this.hooks.afterHand(this, this.lastHand);
+    }
+  }
+
+  NS.Table = Table;
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+  const { RNG, Table, Bot, Genome, generateNames, styleLabel } = NS;
+
+  const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+
+  const DEFAULTS = {
+    bots: 200,
+    tables: 3,
+    seats: 6,
+    sb: 25,                 // центы: $0.25
+    bb: 50,                 // центы: $0.50
+    minBuyBB: 20,
+    maxBuyBB: 100,
+    rakePct: 0.03,
+    rakeCapBB: 3,
+    fixedShare: 0.25,       // доля ботов с фиксированным архетипом (рыба, маньяк, нит ...)
+    evolution: true,
+    genHands: 4000,         // раз в сколько раздач (всего) происходит обучение
+    learnShare: 0.15,        // какая доля худших ботов перенимает стиль лучших
+    mutationRate: 0.35,
+    mutationSigma: 0.08,
+    minWindowHands: 250,
+    snapshotEvery: 250,
+    seed: undefined,
+    debug: false,
+  };
+
+  // состав фиксированных ботов ("рыбы" и разные типы для эксплуатации)
+  const FIXED_MIX = [['FISH', 0.32], ['NIT', 0.18], ['MANIAC', 0.12], ['ROCK', 0.14], ['LAG', 0.1], ['TAG', 0.14]];
+
+  class Simulation {
+    constructor(cfg) {
+      this.cfg = Object.assign({}, DEFAULTS, cfg || {});
+      const c = this.cfg;
+      c.rakeCap = Math.round(c.rakeCapBB * c.bb);
+      this.rng = new RNG(c.seed);
+      this.cfg.seed = this.rng.seed;
+      this.totalHands = 0;
+      this.generation = 0;
+      this.events = [];
+      this.history = [];            // снимки прибыли всех ботов
+      this.evoLog = [];             // снимки средних показателей популяции
+      this.createBots();
+      this.waiting = this.bots.slice();
+      this.rng.shuffle(this.waiting);
+      this.waiting.forEach((b) => { b.waitSince = 0; });
+      this.tables = [];
+      for (let i = 0; i < c.tables; i++) {
+        this.tables.push(new Table(i, c, new RNG((this.rng.seed + 1013 * (i + 1)) >>> 0), {
+          beforeHand: (t) => this.beforeHand(t),
+          afterHand: (t, info) => this.afterHand(t, info),
+        }));
+      }
+      this.snapshot();
+    }
+
+    createBots() {
+      const c = this.cfg, rng = this.rng;
+      const names = generateNames(c.bots, rng);
+      this.bots = [];
+      const nFixed = Math.round(c.bots * c.fixedShare);
+      const ids = this.rng.shuffle(Array.from({ length: c.bots }, (_, i) => i));
+      const fixedSet = new Set(ids.slice(0, nFixed));
+      const fixedArch = [];
+      for (const [a, share] of FIXED_MIX) {
+        const k = Math.round(nFixed * share);
+        for (let i = 0; i < k; i++) fixedArch.push(a);
+      }
+      while (fixedArch.length < nFixed) fixedArch.push('FISH');
+      rng.shuffle(fixedArch);
+      let fi = 0;
+      for (let i = 0; i < c.bots; i++) {
+        let arch, genome, fixed = false;
+        if (fixedSet.has(i)) {
+          arch = fixedArch[fi++]; fixed = true;
+          genome = Genome.makeGenome(arch, rng, 0.05);
+        } else {
+          // эволюционеры стартуют из разных точек: чаще вокруг TAG, иногда вокруг других стилей
+          const base = rng.chance(0.55) ? 'TAG' : rng.pick(['NIT', 'LAG', 'FISH', 'ROCK', 'MANIAC']);
+          arch = 'EVO';
+          genome = Genome.makeGenome(base, rng, 0.14);
+        }
+        genome.buyIn = clamp(genome.buyIn, c.minBuyBB, c.maxBuyBB);
+        const bot = new Bot(i, names[i], genome, arch, fixed, new RNG((rng.seed ^ Math.imul(i + 1, 2654435761)) >>> 0));
+        this.bots.push(bot);
+      }
+    }
+
+    // -------------------------------------------------------- события
+    addEvent(text, type, tableId) {
+      this.events.push({ hand: this.totalHands, text, type: type || 'info', table: tableId });
+      if (this.events.length > 300) this.events.splice(0, this.events.length - 300);
+    }
+
+    // ------------------------------------------- рассадка и выбор стола
+    // "слабость" игрока в глазах остальных: широкий VPIP и убыточность = рыба
+    weakness(bot) {
+      const s = bot.stats;
+      return clamp((s.vpipPct - 0.27) / 0.25, -1, 1) * 0.5 + clamp(-bot.bb100 / 50, -1, 1) * 0.5;
+    }
+
+    tableScore(table) {
+      let sum = 0, n = 0;
+      for (const s of table.seats) if (s) { sum += this.weakness(s.bot); n++; }
+      return n ? sum / n : 0.1;
+    }
+
+    buyInCents(bot) {
+      const c = this.cfg;
+      return Math.round(clamp(bot.genome.buyIn, c.minBuyBB, c.maxBuyBB) * c.bb);
+    }
+
+    leave(table, seat, reason) {
+      const bot = seat.bot;
+      table.unsit(seat.idx);
+      bot.waitSince = this.totalHands;
+      bot.cooldown = this.totalHands + (this.waiting.length > 8 ? 0 : 10 + this.rng.int(40));
+      this.waiting.push(bot);
+    }
+
+    beforeHand(table) {
+      const c = this.cfg;
+      for (const seat of table.seats) {
+        if (!seat) continue;
+        const bot = seat.bot, g = bot.genome;
+        const sessBB = (bot.profit - bot.session.startProfit) / c.bb;
+        let leave = null;
+        if (bot.session.hands >= g.sessionLen) leave = 'time';
+        else if (sessBB <= -g.stopLoss) leave = 'stoploss';
+        else if (sessBB >= g.stopWin) leave = 'stopwin';
+        else if (bot.session.hands > 40 && this.rng.chance(0.004) && this.tableScore(table) < (g.tableSel - 0.5) * 0.6 - 0.15) leave = 'table';
+        if (leave) { this.leave(table, seat, leave); continue; }
+        const target = this.buyInCents(bot);
+        const minBuy = Math.max(c.minBuyBB, 0.3 * g.buyIn) * c.bb;
+        if (seat.stack < minBuy) table.addChips(seat, target - seat.stack);
+      }
+      this.fillSeats(table);
+    }
+
+    fillSeats(table) {
+      const free = table.freeSeatIndexes();
+      if (!free.length || !this.waiting.length) return;
+      const score = this.tableScore(table);
+      for (const idx of free) {
+        if (!this.waiting.length) break;
+        const needPlayers = table.occupied() < 2;
+        let pick = -1;
+        const limit = Math.min(this.waiting.length, 80);
+        for (let i = 0; i < limit; i++) {
+          const b = this.waiting[i];
+          if (b.cooldown > this.totalHands) continue;
+          if (needPlayers) { pick = i; break; }
+          const waited = this.totalHands - b.waitSince;
+          const thr = (b.genome.tableSel - 0.5) * 0.6 - waited / 400;
+          if (score >= thr) { pick = i; break; }
+        }
+        if (pick < 0) break;
+        const bot = this.waiting.splice(pick, 1)[0];
+        table.sit(bot, idx, this.buyInCents(bot));
+        bot.session = { hands: 0, startProfit: bot.profit };
+      }
+    }
+
+    // ----------------------------------------------- после каждой раздачи
+    afterHand(table, info) {
+      this.totalHands++;
+      const bb = this.cfg.bb;
+      if (info.pot >= 60 * bb) {
+        const w = info.winners[0];
+        if (w) this.addEvent(`Стол ${table.id + 1}: ${w.name} забирает банк ${table.money(info.pot)}${w.hand ? ' (' + w.hand + ')' : ''}`, 'bigpot', table.id);
+      }
+      if (this.totalHands % this.cfg.snapshotEvery === 0) this.snapshot();
+      if (this.cfg.evolution && this.totalHands % this.cfg.genHands === 0) this.evolve();
+    }
+
+    snapshot() {
+      this.history.push({ h: this.totalHands, p: Float32Array.from(this.bots, (b) => b.profit / 100) });
+      if (this.history.length > 400) this.history = this.history.filter((_, i) => i % 2 === 0 || i === this.history.length - 1);
+    }
+
+    // --------------------------------------------------------- эволюция
+    // Окно оценки: bb/100 со сжатием к нулю. Худшие боты переписывают гены, смешивая двух лучших + мутация.
+    evolve() {
+      const c = this.cfg, rng = this.rng;
+      const evo = this.bots.filter((b) => !b.fixed && b.window.hands >= c.minWindowHands);
+      const score = (b) => (100 * b.window.netBB) / (b.window.hands + 300);
+      if (evo.length < 8) return;
+      evo.sort((a, b) => score(b) - score(a));
+      const nTop = Math.max(2, Math.round(evo.length * 0.2));
+      const nLearn = Math.max(1, Math.round(evo.length * c.learnShare));
+      const top = evo.slice(0, nTop);
+      const learners = evo.slice(evo.length - nLearn);
+      this.generation++;
+      const pickTop = () => {
+        // турнирный отбор из лучших
+        const a = top[rng.int(top.length)], b = top[rng.int(top.length)];
+        return score(a) >= score(b) ? a : b;
+      };
+      for (const b of learners) {
+        const p1 = pickTop(); let p2 = pickTop();
+        if (p2 === p1 && top.length > 1) p2 = top[(top.indexOf(p1) + 1) % top.length];
+        const child = Genome.mutate(Genome.crossover(p1.genome, p2.genome, rng), rng, c.mutationRate, c.mutationSigma);
+        child.buyIn = clamp(child.buyIn, c.minBuyBB, c.maxBuyBB);
+        b.genome = child;
+        b.generation++;
+        b.learnedFrom = p1.name;
+        b.stats.reset();           // стиль изменился - оппоненты "забывают" старую статистику
+        b.window = { hands: 0, netBB: 0 };
+      }
+      // остальные: память окна затухает, чтобы оценка отражала свежие результаты
+      for (const b of this.bots) {
+        if (!learners.includes(b)) { b.window.hands *= 0.88; b.window.netBB *= 0.88; }
+        b.stats.decay(0.92);
+      }
+      this.recordEvo(top[0], score(top[0]));
+      const best = top[0];
+      this.addEvent(`Поколение ${this.generation}: ${learners.length} ботов переняли стиль лидеров (лучший — ${best.name}, ${score(best).toFixed(1)} bb/100)`, 'evolve');
+    }
+
+    recordEvo(best, bestScore) {
+      let v = 0, p = 0, a = 0, n = 0, bluff = 0, loose = 0;
+      for (const b of this.bots) {
+        if (b.fixed || b.stats.hands < 30) continue;
+        v += b.stats.vpipPct; p += b.stats.pfrPct; a += b.stats.afq; n++;
+        bluff += b.genome.bluff; loose += b.genome.openBase + b.genome.posSlope * 0.5;
+      }
+      this.evoLog.push({
+        gen: this.generation, hands: this.totalHands, vpip: n ? v / n : 0, pfr: n ? p / n : 0, afq: n ? a / n : 0,
+        bluff: n ? bluff / n : 0, loose: n ? loose / n : 0, best: best ? best.name : '', bestScore,
+      });
+    }
+
+    // ------------------------------------------------------------ запуск
+    // Обычный режим: speed = шагов (действий) в секунду на стол, dt в мс.
+    tick(dtMs, speed) {
+      for (const t of this.tables) {
+        t.credit = (t.credit || 0) + (dtMs / 1000) * speed;
+        let guard = 0;
+        while (t.credit >= 0 && guard++ < 50) {
+          const cost = t.lastCost;
+          t.step();
+          t.credit -= t.lastCost > 0 ? t.lastCost : cost;
+        }
+      }
+    }
+
+    // Турбо: максимум шагов за заданное время.
+    runFor(ms) {
+      const end = (typeof performance !== 'undefined' ? performance : Date).now() + ms;
+      const now = () => (typeof performance !== 'undefined' ? performance : Date).now();
+      let n = 0;
+      do {
+        for (const t of this.tables) { t.step(); n++; }
+      } while (now() < end);
+      return n;
+    }
+
+    runHands(targetHands) {
+      let guard = 0;
+      while (this.totalHands < targetHands && guard++ < targetHands * 400) {
+        for (const t of this.tables) t.step();
+      }
+    }
+
+    // ---------------------------------------------------------- рейтинг
+    row(b) {
+      const bb = this.cfg.bb;
+      const s = b.stats;
+      return {
+        id: b.id, name: b.name, arch: b.archetype, fixed: b.fixed,
+        archLabel: Genome.ARCHETYPES[b.archetype].label,
+        style: styleLabel(s),
+        strategy: Genome.stackStrategy(b.genome),
+        profit: b.profit / 100,
+        bb100: b.bb100Raw,
+        bb100s: b.bb100,
+        hands: b.hands,
+        vpip: s.vpipPct, pfr: s.pfrPct, afq: s.afq,
+        table: b.tableId, stack: b.stack / 100, stackBB: b.stack / bb,
+        gen: b.generation, rebuys: b.rebuys, rake: b.rake / 100, bigWin: b.bigWin / 100,
+        buyIn: b.genome.buyIn,
+      };
+    }
+
+    ranking() { return this.bots.map((b) => this.row(b)); }
+
+    totals() {
+      let rake = 0;
+      for (const t of this.tables) rake += t.rakeTotal;
+      return { hands: this.totalHands, rake: rake / 100, generation: this.generation };
+    }
+  }
+
+  NS.Simulation = Simulation;
+  NS.DEFAULTS = DEFAULTS;
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+
+</script>
+<script>
+(function (root) {
+  'use strict';
+  const NS = root.PokerSim || (root.PokerSim = {});
+  const { cardPretty } = NS.Cards;
+  const { Genome, styleLabel } = NS;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const money = (c) => '$' + (c / 100).toFixed(2);
+  const fmt = (x, d) => (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(d === undefined ? 2 : d);
+  const COLORS = ['#f5b942', '#4cc3ff', '#2fbf71', '#c77dff', '#ff7a7a', '#ffffff'];
+
+  function cardHtml(c, small) {
+    if (c === null || c === undefined) return `<span class="card ${small ? 'sm' : ''} empty"></span>`;
+    const p = cardPretty(c);
+    return `<span class="card ${small ? 'sm' : ''} ${p.red ? 'red' : ''}">${p.rank}<span class="s">${p.sym}</span></span>`;
+  }
+  const backHtml = (small) => `<span class="card ${small ? 'sm' : ''} back"></span>`;
+
+  // кэшируем значения, чтобы не трогать DOM без необходимости
+  function setText(el, v) { if (el._t !== v) { el._t = v; el.textContent = v; } }
+  function setHtml(el, v) { if (el._h !== v) { el._h = v; el.innerHTML = v; } }
+  function setCls(el, v) { if (el._c !== v) { el._c = v; el.className = v; } }
+  function setDisp(el, v) { if (el._d !== v) { el._d = v; el.style.display = v; } }
+
+  // ================================================================ СТОЛ
+  class TableView {
+    constructor(table, ui) {
+      this.table = table; this.ui = ui;
+      const n = table.seats.length;
+      const card = document.createElement('div');
+      card.className = 'table-card' + (n >= 8 ? ' dense' : '');
+      card.innerHTML = `
+        <div class="table-head"><span class="t-title"></span><small class="t-meta"></small></div>
+        <div class="felt-wrap"><div class="felt"><div class="felt-inner">
+          <div class="center-info"><div class="pot"></div><div class="board-cards"></div><div class="street-name"></div></div>
+        </div></div></div>
+        <div class="table-log"></div>`;
+      this.el = card;
+      this.inner = card.querySelector('.felt-inner');
+      this.refs = {
+        title: card.querySelector('.t-title'), meta: card.querySelector('.t-meta'),
+        pot: card.querySelector('.pot'), board: card.querySelector('.board-cards'),
+        street: card.querySelector('.street-name'), log: card.querySelector('.table-log'),
+      };
+      this.seatEls = [];
+      for (let i = 0; i < n; i++) {
+        const ang = Math.PI / 2 + (i * 2 * Math.PI) / n;
+        const x = 50 + 41 * Math.cos(ang), y = 50 + 39 * Math.sin(ang);
+        const seat = document.createElement('div');
+        seat.className = 'seat empty';
+        seat.style.left = x + '%'; seat.style.top = y + '%';
+        seat.innerHTML = `<div class="plate"><span class="pos"></span><span class="dealer">D</span>
+          <div class="cards"></div><div class="name"></div><div class="stack"></div><div class="tag"></div>
+          <div class="action"></div></div>`;
+        this.inner.appendChild(seat);
+        const chip = document.createElement('div');
+        chip.className = 'betchip';
+        chip.style.left = (50 + 19 * Math.cos(ang)) + '%'; chip.style.top = (50 + 16 * Math.sin(ang)) + '%';
+        this.inner.appendChild(chip);
+        const r = {
+          root: seat, pos: seat.querySelector('.pos'), cards: seat.querySelector('.cards'),
+          name: seat.querySelector('.name'), stack: seat.querySelector('.stack'), tag: seat.querySelector('.tag'),
+          action: seat.querySelector('.action'), chip, botId: -1,
+        };
+        r.name.addEventListener('click', () => { if (r.botId >= 0) ui.openBot(r.botId); });
+        this.seatEls.push(r);
+      }
+      const cfg = table.cfg;
+      setText(this.refs.title, `Стол ${table.id + 1}`);
+      setText(this.refs.meta, `NL${Math.round(cfg.bb)} · ${money(cfg.sb)}/${money(cfg.bb)} · ${cfg.seats}-max`);
+    }
+
+    update(showCards) {
+      const t = this.table, R = this.refs;
+      let potTotal = t.pot;
+      for (const s of t.seats) if (s) potTotal += s.bet;
+      if (t.phase === 'ended' && t.lastHand) potTotal = t.lastHand.pot;
+      setText(R.pot, potTotal > 0 ? 'Банк ' + money(potTotal) : '');
+      let bhtml = '';
+      for (let i = 0; i < 5; i++) bhtml += cardHtml(t.board[i] === undefined ? null : t.board[i]);
+      setHtml(R.board, bhtml);
+      const streetRu = { preflop: 'Префлоп', flop: 'Флоп', turn: 'Тёрн', river: 'Ривер' };
+      setText(R.street, t.phase === 'waiting' ? 'ожидание игроков' : t.phase === 'ended' ? (t.lastHand && t.lastHand.showdown ? 'вскрытие' : 'раздача окончена') : streetRu[t.street]);
+      setText(R.meta, `NL${Math.round(t.cfg.bb)} · ${money(t.cfg.sb)}/${money(t.cfg.bb)} · рука #${t.handNo} · рейк ${money(t.rakeTotal)}`);
+
+      for (let i = 0; i < t.seats.length; i++) {
+        const s = t.seats[i], r = this.seatEls[i];
+        if (!s) {
+          setCls(r.root, 'seat empty');
+          setText(r.name, 'свободно'); setText(r.stack, ''); setText(r.tag, '');
+          setHtml(r.cards, ''); setText(r.action, ''); setDisp(r.action, 'none'); setDisp(r.chip, 'none'); setText(r.pos, '');
+          r.botId = -1;
+          continue;
+        }
+        const bot = s.bot;
+        r.botId = bot.id;
+        const acting = t.phase === 'betting' && t.toAct === i;
+        const winner = t.phase === 'ended' && s.win > 0;
+        const cls = ['seat'];
+        if (s.inHand && s.folded) cls.push('folded');
+        if (acting) cls.push('acting');
+        if (winner) cls.push('winner');
+        if (t.button === i && s.inHand) cls.push('btn');
+        setCls(r.root, cls.join(' '));
+        setText(r.name, bot.name);
+        setText(r.stack, money(s.stack));
+        if (r._tagHand !== t.handNo || r._tagBot !== bot.id) {
+          r._tagHand = t.handNo; r._tagBot = bot.id;
+          setText(r.tag, `${styleLabel(bot.stats)} · ${Genome.stackStrategy(bot.genome)}`);
+        }
+        setText(r.pos, s.inHand ? s.position : '');
+        // карты
+        let ch = '';
+        if (s.inHand && s.hole.length === 2) {
+          const face = showCards || s.show;
+          ch = face ? cardHtml(s.hole[0], true) + cardHtml(s.hole[1], true) : backHtml(true) + backHtml(true);
+        }
+        setHtml(r.cards, ch);
+        // действие
+        let at = s.lastAction, ac = '';
+        if (t.phase === 'ended' && s.inHand) {
+          if (s.win > 0) { at = `+${money(s.win)}${s.handText ? ' · ' + s.handText : ''}`; ac = 'a-win'; }
+          else if (!s.folded && s.show && s.handText) at = s.handText;
+        }
+        if (!ac && at) ac = at.startsWith('Fold') ? 'a-fold' : at.startsWith('Call') || at.startsWith('Check') ? 'a-call' : 'a-raise';
+        setText(r.action, at);
+        setCls(r.action, 'action ' + ac);
+        setDisp(r.action, at ? 'block' : 'none');
+        // фишки ставки
+        if (s.bet > 0) { setText(r.chip, money(s.bet)); setDisp(r.chip, 'block'); } else setDisp(r.chip, 'none');
+      }
+      // лог
+      const lines = t.log.slice(-3);
+      setHtml(R.log, lines.map((l) => `<div class="${l.kind}">${esc(l.text)}</div>`).join(''));
+    }
+  }
+
+  // ================================================================ ГРАФИКИ
+  function drawLines(canvas, series, opt) {
+    const dpr = window.devicePixelRatio || 1;
+    const H = opt.height || 170;
+    const W = canvas.clientWidth || 400;
+    canvas.style.height = H + 'px';
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const padL = 44, padR = 8, padT = 8, padB = 18;
+    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+    for (const s of series) for (let i = 0; i < s.x.length; i++) {
+      xmin = Math.min(xmin, s.x[i]); xmax = Math.max(xmax, s.x[i]);
+      ymin = Math.min(ymin, s.y[i]); ymax = Math.max(ymax, s.y[i]);
+    }
+    if (!isFinite(xmin) || xmax === xmin) {
+      ctx.fillStyle = '#6b7788'; ctx.font = '12px system-ui'; ctx.fillText('Собираем данные…', 12, H / 2);
+      return;
+    }
+    if (opt.zero) { ymin = Math.min(ymin, 0); ymax = Math.max(ymax, 0); }
+    if (ymax === ymin) { ymax += 1; ymin -= 1; }
+    const pad = (ymax - ymin) * 0.06; ymin -= pad; ymax += pad;
+    const X = (v) => padL + ((v - xmin) / (xmax - xmin)) * (W - padL - padR);
+    const Y = (v) => padT + (1 - (v - ymin) / (ymax - ymin)) * (H - padT - padB);
+    ctx.strokeStyle = '#26303f'; ctx.fillStyle = '#7d8999'; ctx.font = '10.5px system-ui'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const v = ymin + ((ymax - ymin) * i) / 4, y = Y(v);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      ctx.fillText(opt.yfmt ? opt.yfmt(v) : v.toFixed(0), 4, y + 3);
+    }
+    if (opt.zero) {
+      ctx.strokeStyle = '#4a586b'; ctx.beginPath(); ctx.moveTo(padL, Y(0)); ctx.lineTo(W - padR, Y(0)); ctx.stroke();
+    }
+    ctx.fillText(opt.xfmt ? opt.xfmt(xmin) : xmin.toFixed(0), padL, H - 4);
+    const xe = opt.xfmt ? opt.xfmt(xmax) : xmax.toFixed(0);
+    ctx.fillText(xe, W - padR - ctx.measureText(xe).width, H - 4);
+    series.forEach((s) => {
+      ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 1.6;
+      ctx.setLineDash(s.dash || []);
+      ctx.beginPath();
+      for (let i = 0; i < s.x.length; i++) {
+        const px = X(s.x[i]), py = Y(s.y[i]);
+        if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+    // легенда
+    if (opt.legend) {
+      ctx.font = '10.5px system-ui';
+      let lx = padL + 4, ly = padT + 10;
+      series.forEach((s) => {
+        const w = ctx.measureText(s.name).width + 18;
+        if (lx + w > W - padR) { lx = padL + 4; ly += 13; }
+        ctx.fillStyle = s.color; ctx.fillRect(lx, ly - 7, 9, 3);
+        ctx.fillStyle = '#c2ccda'; ctx.fillText(s.name, lx + 13, ly - 3);
+        lx += w + 4;
+      });
+    }
+  }
+
+  // ================================================================ UI
+  class UI {
+    constructor() {
+      this.sim = null;
+      this.views = [];
+      this.sortKey = 'profit'; this.sortDir = -1;
+      this.selected = -1;
+      this.showCards = true;
+      this.lastBoard = 0; this.lastCharts = 0; this.lastEvents = -1;
+      this.bindStatic();
+    }
+
+    bindStatic() {
+      $('chkCards').addEventListener('change', (e) => { this.showCards = e.target.checked; });
+      $('selFilter').addEventListener('change', () => this.renderBoard(true));
+      $('inpSearch').addEventListener('input', () => this.renderBoard(true));
+      document.querySelectorAll('#board th').forEach((th) => th.addEventListener('click', () => {
+        const k = th.dataset.sort;
+        if (k === 'rank') { this.sortKey = 'profit'; this.sortDir = -1; }
+        else if (this.sortKey === k) this.sortDir *= -1;
+        else { this.sortKey = k; this.sortDir = (k === 'name' || k === 'style' || k === 'strategy' || k === 'table') ? 1 : -1; }
+        this.renderBoard(true);
+      }));
+      $('boardBody').addEventListener('click', (e) => {
+        const tr = e.target.closest('tr');
+        if (tr && tr.dataset.id !== undefined) this.openBot(Number(tr.dataset.id));
+      });
+      $('dlgBot').addEventListener('close', () => { this.botOpen = false; });
+    }
+
+    attach(sim) {
+      this.sim = sim;
+      this.selected = -1;
+      const host = $('tables');
+      host.innerHTML = '';
+      this.views = sim.tables.map((t) => { const v = new TableView(t, this); host.appendChild(v.el); return v; });
+      const c = sim.cfg;
+      $('subtitle').textContent = `NL${c.bb} · $${(c.sb / 100).toFixed(2)}/$${(c.bb / 100).toFixed(2)} · ${c.bots} ботов · ${c.tables} стол(а) × ${c.seats} мест · рейк ${(c.rakePct * 100).toFixed(1)}%`;
+      this.lastEvents = -1;
+      this.renderBoard(true); this.renderCharts(); this.renderEvents(true);
+    }
+
+    frame(now) {
+      for (const v of this.views) v.update(this.showCards);
+      const sim = this.sim;
+      setText($('kHands'), sim.totalHands.toLocaleString('ru-RU'));
+      setText($('kGen'), String(sim.generation));
+      setText($('kRake'), '$' + sim.totals().rake.toFixed(0));
+      if (now - this.lastBoard > 900) { this.lastBoard = now; this.renderBoard(false); this.renderEvents(false); if (this.botOpen) this.renderBot(); }
+      if (now - this.lastCharts > 2000) { this.lastCharts = now; this.renderCharts(); }
+    }
+
+    // ------------------------------------------------------------ рейтинг
+    renderBoard(force) {
+      const sim = this.sim;
+      let rows = sim.ranking();
+      // общий рейтинг по прибыли (для номера места)
+      const byProfit = rows.slice().sort((a, b) => b.profit - a.profit);
+      const rankOf = new Map(); byProfit.forEach((r, i) => rankOf.set(r.id, i + 1));
+      const f = $('selFilter').value, q = $('inpSearch').value.trim().toLowerCase();
+      if (f === 'evo') rows = rows.filter((r) => !r.fixed);
+      else if (f === 'fixed') rows = rows.filter((r) => r.fixed);
+      else if (f === 'playing') rows = rows.filter((r) => r.table >= 0);
+      if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.style.toLowerCase().includes(q) || r.archLabel.toLowerCase().includes(q));
+      const k = this.sortKey, d = this.sortDir;
+      rows.sort((a, b) => {
+        const x = a[k], y = b[k];
+        if (typeof x === 'string') return d * x.localeCompare(y);
+        return d * (x - y) || b.profit - a.profit;
+      });
+      document.querySelectorAll('#board th').forEach((th) => th.classList.toggle('sorted', th.dataset.sort === k));
+      const max = 400;
+      let html = '';
+      for (let i = 0; i < rows.length && i < max; i++) {
+        const r = rows[i], rk = rankOf.get(r.id);
+        const cls = (rk <= 3 ? 'r' + rk : '') + (r.id === this.selected ? ' sel' : '');
+        const tdot = r.table >= 0 ? `<span class="tdot" style="background:${COLORS[r.table % COLORS.length]}"></span>${r.table + 1}` : '<span class="muted">—</span>';
+        html += `<tr class="${cls}" data-id="${r.id}">
+          <td>${rk}</td>
+          <td>${esc(r.name)} ${r.fixed ? '<span class="pill fixed" title="Фиксированный стиль, не обучается">' + esc(r.archLabel) + '</span>' : r.gen ? '<span class="pill" title="Сколько раз перенимал стиль лидеров">g' + r.gen + '</span>' : ''}</td>
+          <td>${esc(r.style)}</td>
+          <td><span class="pill ${r.strategy.toLowerCase()}">${r.strategy}</span></td>
+          <td class="num ${r.profit >= 0 ? 'pos-n' : 'neg-n'}">${fmt(r.profit)}</td>
+          <td class="num ${r.bb100 >= 0 ? 'pos-n' : 'neg-n'}">${fmt(r.bb100, 1)}</td>
+          <td class="num">${r.hands}</td>
+          <td class="num">${(r.vpip * 100).toFixed(0)}/${(r.pfr * 100).toFixed(0)}</td>
+          <td class="num">${tdot}</td></tr>`;
+      }
+      setHtml($('boardBody'), html);
+    }
+
+    renderEvents(force) {
+      const ev = this.sim.events;
+      if (!force && ev.length === this.lastEvents) return;
+      this.lastEvents = ev.length;
+      const html = ev.slice(-40).reverse().map((e) => `<div class="${e.type}"><small>#${e.hand}</small>${esc(e.text)}</div>`).join('');
+      setHtml($('events'), html || '<div class="muted">Событий пока нет — крупные банки и обучение ботов появятся здесь.</div>');
+    }
+
+    // ------------------------------------------------------------ графики
+    renderCharts() {
+      const sim = this.sim, hist = sim.history;
+      if (hist.length > 1) {
+        const last = hist[hist.length - 1].p;
+        const idx = Array.from(last.keys()).sort((a, b) => last[b] - last[a]).slice(0, 5);
+        const series = idx.map((id, i) => ({
+          name: sim.bots[id].name, color: COLORS[i], x: hist.map((h) => h.h), y: hist.map((h) => h.p[id]), width: 1.7,
+        }));
+        if (this.selected >= 0 && !idx.includes(this.selected)) {
+          series.push({ name: sim.bots[this.selected].name + ' (выбран)', color: COLORS[5], dash: [4, 3], width: 1.6, x: hist.map((h) => h.h), y: hist.map((h) => h.p[this.selected]) });
+        }
+        drawLines($('chartProfit'), series, { height: 170, zero: true, legend: true, yfmt: (v) => '$' + v.toFixed(0), xfmt: (v) => Math.round(v / 1000) + 'k рук' });
+      } else drawLines($('chartProfit'), [], { height: 170 });
+      const evo = sim.evoLog;
+      if (evo.length > 1) {
+        const x = evo.map((e) => e.gen);
+        drawLines($('chartEvo'), [
+          { name: 'VPIP', color: '#4cc3ff', x, y: evo.map((e) => e.vpip * 100) },
+          { name: 'PFR', color: '#f5b942', x, y: evo.map((e) => e.pfr * 100) },
+          { name: 'агрессия', color: '#c77dff', x, y: evo.map((e) => e.afq * 100) },
+        ], { height: 150, legend: true, yfmt: (v) => v.toFixed(0) + '%', xfmt: (v) => 'пок. ' + v });
+      } else drawLines($('chartEvo'), [], { height: 150 });
+    }
+
+    // ------------------------------------------------------------ карточка бота
+    openBot(id) {
+      this.selected = id;
+      this.botId = id;
+      this.botOpen = true;
+      this.renderBot();
+      const dlg = $('dlgBot');
+      if (!dlg.open) dlg.showModal();
+      this.renderBoard(true);
+    }
+
+    renderBot() {
+      const sim = this.sim, bot = sim.bots[this.botId];
+      if (!bot) return;
+      const r = sim.row(bot), s = bot.stats, g = bot.genome;
+      let genes = '', group = '';
+      for (const k of Genome.GENE_KEYS) {
+        const d = Genome.GENES[k];
+        if (d.group !== group) { group = d.group; genes += `<div class="group-title">${group}</div>`; }
+        const pct = ((g[k] - d.min) / (d.max - d.min)) * 100;
+        const v = d.max <= 1.5 && d.min >= -0.1 ? g[k].toFixed(2) : g[k].toFixed(1);
+        genes += `<div class="gene"><div>${d.label}<div class="bar"><i style="width:${pct.toFixed(0)}%"></i></div></div><div class="val">${v}</div></div>`;
+      }
+      const where = r.table >= 0 ? `за столом ${r.table + 1}, стек ${money(bot.stack)} (${r.stackBB.toFixed(0)} ББ)` : 'ожидает свободное место';
+      const html = `
+        <div class="bot-head"><h2>${esc(bot.name)}</h2>
+          <span class="pill ${bot.fixed ? 'fixed' : ''}">${esc(r.archLabel)}</span>
+          <span class="pill ${r.strategy.toLowerCase()}">${r.strategy} · закупка ${g.buyIn.toFixed(0)} ББ</span>
+          <span class="muted">${where}</span></div>
+        <div class="muted">Стиль по статистике: <b>${esc(r.style)}</b>${bot.learnedFrom ? ` · последнее обучение у <b>${esc(bot.learnedFrom)}</b> (поколение ${bot.generation})` : ''}</div>
+        <div class="bot-grid">
+          <div class="bot-stat"><small>Прибыль</small><b class="${r.profit >= 0 ? 'pos-n' : 'neg-n'}">${fmt(r.profit)} $</b></div>
+          <div class="bot-stat"><small>bb/100</small><b class="${r.bb100 >= 0 ? 'pos-n' : 'neg-n'}">${fmt(r.bb100, 1)}</b></div>
+          <div class="bot-stat"><small>Раздач</small><b>${r.hands}</b></div>
+          <div class="bot-stat"><small>Рейк заплачен</small><b>$${r.rake.toFixed(2)}</b></div>
+          <div class="bot-stat"><small>VPIP / PFR</small><b>${(s.vpipPct * 100).toFixed(0)} / ${(s.pfrPct * 100).toFixed(0)}</b></div>
+          <div class="bot-stat"><small>3-bet / агрессия</small><b>${(s.threeBetPct * 100).toFixed(0)}% / ${(s.afq * 100).toFixed(0)}%</b></div>
+          <div class="bot-stat"><small>C-bet / фолд на бет</small><b>${(s.cbetPct * 100).toFixed(0)}% / ${(s.foldToBetPct * 100).toFixed(0)}%</b></div>
+          <div class="bot-stat"><small>WTSD / W$SD</small><b>${(s.wtsdPct * 100).toFixed(0)}% / ${(s.wsdPct * 100).toFixed(0)}%</b></div>
+        </div>
+        <canvas id="chartBot" height="140"></canvas>
+        <div class="panel-title" style="margin-top:12px">Гены стратегии <small>(то, что бот подбирает сам)</small></div>
+        <div class="genes">${genes}</div>`;
+      const body = $('botBody');
+      body.innerHTML = html;
+      const hist = sim.history;
+      if (hist.length > 1) {
+        drawLines($('chartBot'), [{ name: bot.name, color: '#4cc3ff', x: hist.map((h) => h.h), y: hist.map((h) => h.p[bot.id]) }],
+          { height: 140, zero: true, yfmt: (v) => '$' + v.toFixed(0), xfmt: (v) => Math.round(v / 1000) + 'k рук' });
+      }
+    }
+  }
+
+  NS.UI = UI;
+})(window);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const NS = window.PokerSim;
+  const $ = (id) => document.getElementById(id);
+
+  const SPEEDS = { turbo: Infinity };
+  let sim = null, ui = null;
+  let running = true, speed = 4, last = performance.now();
+  let hpsMark = { t: performance.now(), h: 0 };
+
+  const FIELD_DEFAULTS = {
+    cfgBots: 200, cfgTables: 3, cfgSeats: 6, cfgSb: 0.25, cfgBb: 0.5, cfgMinBuy: 20, cfgMaxBuy: 100,
+    cfgRake: 3, cfgRakeCap: 3, cfgFixed: 25, cfgGen: 4000, cfgSeed: '',
+  };
+
+  function readConfig() {
+    const n = (id, d) => { const v = Number($(id).value); return Number.isFinite(v) && $(id).value !== '' ? v : d; };
+    const sb = Math.max(1, Math.round(n('cfgSb', 0.25) * 100));
+    const bb = Math.max(2, Math.round(n('cfgBb', 0.5) * 100));
+    const cfg = {
+      bots: Math.max(2, Math.min(1000, Math.round(n('cfgBots', 200)))),
+      tables: Math.max(1, Math.min(8, Math.round(n('cfgTables', 3)))),
+      seats: Math.max(2, Math.min(10, Math.round(n('cfgSeats', 6)))),
+      sb: Math.min(sb, bb), bb,
+      minBuyBB: n('cfgMinBuy', 20), maxBuyBB: Math.max(n('cfgMaxBuy', 100), n('cfgMinBuy', 20)),
+      rakePct: Math.max(0, n('cfgRake', 3)) / 100, rakeCapBB: Math.max(0, n('cfgRakeCap', 3)),
+      fixedShare: Math.max(0, Math.min(0.9, n('cfgFixed', 25) / 100)),
+      genHands: Math.max(500, n('cfgGen', 4000)),
+      evolution: $('cfgEvo').checked,
+    };
+    if ($('cfgSeed').value !== '') cfg.seed = Number($('cfgSeed').value);
+    return cfg;
+  }
+
+  function start(cfg) {
+    sim = new NS.Simulation(cfg);
+    ui.attach(sim);
+    hpsMark = { t: performance.now(), h: 0 };
+    try { localStorage.setItem('pokerArenaCfg', JSON.stringify(cfg)); } catch (e) { /* ignore */ }
+  }
+
+  function loadSaved() {
+    try {
+      const c = JSON.parse(localStorage.getItem('pokerArenaCfg') || 'null');
+      if (!c) return;
+      $('cfgBots').value = c.bots; $('cfgTables').value = c.tables; $('cfgSeats').value = c.seats;
+      $('cfgSb').value = (c.sb / 100); $('cfgBb').value = (c.bb / 100);
+      $('cfgMinBuy').value = c.minBuyBB; $('cfgMaxBuy').value = c.maxBuyBB;
+      $('cfgRake').value = c.rakePct * 100; $('cfgRakeCap').value = c.rakeCapBB;
+      $('cfgFixed').value = Math.round(c.fixedShare * 100); $('cfgGen').value = c.genHands;
+      $('cfgEvo').checked = c.evolution !== false;
+    } catch (e) { /* ignore */ }
+  }
+
+  function setRunning(v) {
+    running = v;
+    $('btnPlay').textContent = running ? '⏸ Пауза' : '▶ Продолжить';
+    last = performance.now();
+  }
+
+  function loop(now) {
+    const dt = Math.min(100, now - last);
+    last = now;
+    if (running && sim) {
+      if (speed === Infinity) sim.runFor(14);
+      else sim.tick(dt, speed);
+    }
+    if (sim) {
+      ui.frame(now);
+      if (now - hpsMark.t > 1000) {
+        const hps = ((sim.totalHands - hpsMark.h) * 1000) / (now - hpsMark.t);
+        $('kHps').textContent = hps >= 10 ? Math.round(hps) : hps.toFixed(1);
+        hpsMark = { t: now, h: sim.totalHands };
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function exportJson() {
+    const rows = sim.bots.map((b) => Object.assign(sim.row(b), { genome: b.genome }));
+    rows.sort((a, b) => b.profit - a.profit);
+    const blob = new Blob([JSON.stringify({ config: sim.cfg, totalHands: sim.totalHands, generation: sim.generation, bots: rows }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `poker-arena-${sim.totalHands}-hands.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function init() {
+    ui = new NS.UI();
+    loadSaved();
+    $('btnPlay').addEventListener('click', () => setRunning(!running));
+    $('selSpeed').addEventListener('change', (e) => { speed = e.target.value === 'turbo' ? Infinity : Number(e.target.value); });
+    $('btnSettings').addEventListener('click', () => $('dlgSettings').showModal());
+    $('btnExport').addEventListener('click', exportJson);
+    $('btnApply').addEventListener('click', (e) => { e.preventDefault(); $('dlgSettings').close(); start(readConfig()); setRunning(true); });
+    $('btnDefaults').addEventListener('click', (e) => {
+      e.preventDefault();
+      for (const [id, v] of Object.entries(FIELD_DEFAULTS)) $(id).value = v;
+      $('cfgEvo').checked = true;
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); setRunning(!running); }
+    });
+    // параметры из адресной строки: ?bots=50&tables=2&seats=9&speed=turbo&seed=1
+    const q = new URLSearchParams(location.search);
+    for (const [k, id] of [['bots', 'cfgBots'], ['tables', 'cfgTables'], ['seats', 'cfgSeats'], ['sb', 'cfgSb'], ['bb', 'cfgBb'], ['seed', 'cfgSeed']]) {
+      if (q.has(k)) $(id).value = q.get(k);
+    }
+    if (q.get('speed')) { $('selSpeed').value = q.get('speed'); speed = q.get('speed') === 'turbo' ? Infinity : Number(q.get('speed')); }
+    start(readConfig());
+    requestAnimationFrame(loop);
+    window.__arena = { get sim() { return sim; }, ui };
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+</script>
+</body>
+</html>

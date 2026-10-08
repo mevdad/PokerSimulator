@@ -1,0 +1,13 @@
+{
+  "name": "poker-bots-arena",
+  "version": "0.1.0",
+  "description": "Симулятор кеш-игры в покер (NL Hold'em) с самообучающимися ботами и визуализацией",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node test/run-tests.js",
+    "sim": "node sim.js",
+    "build": "node scripts/build.js"
+  },
+  "engines": { "node": ">=16" }
+}

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poker Bots Arena — кеш-симулятор NL Hold'em</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">♠</span>
+    <div>
+      <h1>Poker Bots Arena</h1>
+      <div class="sub" id="subtitle">NL Hold'em · кеш</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="btnPlay" class="btn primary" title="Пауза / продолжить (пробел)">⏸ Пауза</button>
+    <label class="speed">Скорость
+      <select id="selSpeed">
+        <option value="2">1× медленно</option>
+        <option value="4" selected>2× обычно</option>
+        <option value="8">4× быстро</option>
+        <option value="18">8× очень быстро</option>
+        <option value="45">20×</option>
+        <option value="turbo">Турбо (макс.)</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="chkCards" checked> Карты ботов</label>
+    <button id="btnSettings" class="btn">⚙ Настройки</button>
+    <button id="btnExport" class="btn" title="Скачать рейтинг и гены ботов в JSON">⭳ JSON</button>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><span id="kHands">0</span><small>раздач</small></div>
+    <div class="kpi"><span id="kHps">0</span><small>раздач/сек</small></div>
+    <div class="kpi"><span id="kGen">0</span><small>поколение</small></div>
+    <div class="kpi"><span id="kRake">$0</span><small>рейк</small></div>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="left">
+    <div id="tables" class="tables"></div>
+    <div class="panel">
+      <div class="panel-title">События</div>
+      <div id="events" class="events"></div>
+    </div>
+  </section>
+
+  <aside class="right">
+    <div class="panel">
+      <div class="panel-title">
+        Рейтинг игроков
+        <span class="filters">
+          <select id="selFilter">
+            <option value="all">все</option>
+            <option value="evo">эволюционеры</option>
+            <option value="fixed">фикс. стили</option>
+            <option value="playing">за столами</option>
+          </select>
+          <input id="inpSearch" type="search" placeholder="поиск…">
+        </span>
+      </div>
+      <div class="board-wrap">
+        <table id="board" class="board">
+          <thead>
+            <tr>
+              <th data-sort="rank">#</th>
+              <th data-sort="name">Игрок</th>
+              <th data-sort="style" title="Стиль по статистике (HUD)">Стиль</th>
+              <th data-sort="strategy" title="Стратегия стека: SSS ≤40 ББ, MSS 40–80, BSS 80+">Стек</th>
+              <th data-sort="profit" class="num">Прибыль</th>
+              <th data-sort="bb100" class="num" title="Выигрыш в больших блайндах на 100 рук">bb/100</th>
+              <th data-sort="hands" class="num">Рук</th>
+              <th data-sort="vpip" class="num" title="VPIP / PFR">VPIP/PFR</th>
+              <th data-sort="table" class="num">Стол</th>
+            </tr>
+          </thead>
+          <tbody id="boardBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Прибыль лидеров <small id="chartHint">топ-5 + выбранный бот</small></div>
+      <canvas id="chartProfit" height="170"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Эволюция популяции <small>VPIP / PFR / агрессия по поколениям</small></div>
+      <canvas id="chartEvo" height="150"></canvas>
+    </div>
+  </aside>
+</main>
+
+<!-- Карточка бота -->
+<dialog id="dlgBot" class="dlg">
+  <form method="dialog" class="dlg-close"><button class="btn">✕</button></form>
+  <div id="botBody"></div>
+</dialog>
+
+<!-- Настройки -->
+<dialog id="dlgSettings" class="dlg">
+  <form method="dialog" class="dlg-close"><button class="btn">✕</button></form>
+  <h2>Настройки симуляции</h2>
+  <p class="muted">Изменения применяются при перезапуске: все боты начнут с нуля.</p>
+  <div class="grid-form" id="settingsForm">
+    <label>Ботов <input type="number" id="cfgBots" min="2" max="1000" value="200"></label>
+    <label>Столов <input type="number" id="cfgTables" min="1" max="8" value="3"></label>
+    <label>Игроков за столом <input type="number" id="cfgSeats" min="2" max="10" value="6"></label>
+    <label>Малый блайнд, $ <input type="number" id="cfgSb" min="0.01" step="0.01" value="0.25"></label>
+    <label>Большой блайнд, $ <input type="number" id="cfgBb" min="0.02" step="0.01" value="0.5"></label>
+    <label>Мин. закупка, ББ <input type="number" id="cfgMinBuy" min="5" max="200" value="20"></label>
+    <label>Макс. закупка, ББ <input type="number" id="cfgMaxBuy" min="20" max="500" value="100"></label>
+    <label>Рейк, % <input type="number" id="cfgRake" min="0" max="10" step="0.5" value="3"></label>
+    <label>Лимит рейка, ББ <input type="number" id="cfgRakeCap" min="0" max="10" step="0.5" value="3"></label>
+    <label>Фикс. стили (рыбы и др.), % <input type="number" id="cfgFixed" min="0" max="90" value="25"></label>
+    <label>Раздач на поколение <input type="number" id="cfgGen" min="500" max="100000" step="500" value="4000"></label>
+    <label>Seed (пусто = случайный) <input type="number" id="cfgSeed" placeholder="случайный"></label>
+    <label class="check wide"><input type="checkbox" id="cfgEvo" checked> Включить обучение ботов (эволюция стратегий)</label>
+  </div>
+  <div class="dlg-actions">
+    <button id="btnApply" class="btn primary">▶ Применить и перезапустить</button>
+    <button id="btnDefaults" class="btn">Сбросить значения</button>
+  </div>
+</dialog>
+
+<script src="src/rng.js"></script>
+<script src="src/cards.js"></script>
+<script src="src/evaluator.js"></script>
+<script src="src/preflop.js"></script>
+<script src="src/equity.js"></script>
+<script src="src/stats.js"></script>
+<script src="src/names.js"></script>
+<script src="src/genome.js"></script>
+<script src="src/bot.js"></script>
+<script src="src/table.js"></script>
+<script src="src/simulation.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
