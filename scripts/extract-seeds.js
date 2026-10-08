@@ -7,7 +7,7 @@ const src = process.argv[2];
 const top = Number(process.argv[3] || 60);
 if (!src) { console.error('Использование: node scripts/extract-seeds.js results.json [сколько]'); process.exit(1); }
 const d = JSON.parse(fs.readFileSync(src, 'utf8'));
-const pool = d.bots.filter((b) => !b.fixed && b.hands >= 1500 && b.genome).sort((a, b) => b.bb100s - a.bb100s).slice(0, top);
+const pool = d.bots.filter((b) => !b.fixed && b.hands >= 800 && b.bb100s > 3 && b.genome).sort((a, b) => b.bb100s - a.bb100s).slice(0, top);
 const out = {
   source: { totalHands: d.totalHands, generation: d.generation, seed: d.config && d.config.seed },
   genomes: pool.map((b) => b.genome),

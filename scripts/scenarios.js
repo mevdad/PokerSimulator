@@ -21,6 +21,7 @@ if (args.help) {
   --players L     игроки (200)
   --max-team L    макс. ботов компании за столом (2)
   --tables L      число столов (3)
+  --profile L     игроки: mixed (с рыбами), regs (сильные регуляры), elite (лучшие эволюционировавшие) — список (mixed)
   --seats N       мест за столом (6)
   --hands N       раздач на один прогон (30000)
   --repeats N     повторов с разными seed (1)
@@ -35,6 +36,7 @@ const o = {
   companies: E.parseList(args.company, [200]), players: E.parseList(args.players, [200]),
   maxTeams: E.parseList(args['max-team'], [2]), tables: E.parseList(args.tables, [3]),
   repeats: Math.max(1, num('repeats', 1)), seed: num('seed', 1),
+  profiles: String(args.profile || 'mixed').split(',').filter(Boolean),
 };
 const hands = num('hands', 30000);
 const target = num('target', 3) / 100;
@@ -59,11 +61,11 @@ const key = flow === 'drop' ? 'holdD' : 'holdT';
 rows.sort((a, b) => Math.abs(a[key] - target) - Math.abs(b[key] - target));
 const pc = (x, d) => (Number.isFinite(x) ? (x * 100).toFixed(d === undefined ? 2 : d) + '%' : '—');
 const padl = (s, n) => String(s).padStart(n);
-console.log(' столы макс/стол  компания игроки   доля(обор.)  95% ДИ / sd        доля(закуп.)  bb/100 комп.  bb/100 игр.  прибыль $   в плюсе');
+console.log('профиль  столы макс/стол  компания игроки   доля(обор.)  95% ДИ / sd        доля(закуп.)  bb/100 комп.  bb/100 игр.  прибыль $   в плюсе');
 for (const r of rows) {
   const spread = r.n > 1 ? `±${pc(r.holdTsd)} (sd)` : `[${pc(r.loT, 1)}…${pc(r.hiT, 1)}]`;
   const hit = Number.isFinite(r.loT) && r.n === 1 ? (target >= r.loT && target <= r.hiT ? ' ✓' : '  ') : '  ';
-  console.log(`${padl(r.tables, 5)}${padl(r.maxTeam, 10)}${padl(r.company, 11)}${padl(r.players, 8)}   ${padl(pc(r.holdT), 9)}  ${padl(spread, 18)}${hit}  ${padl(pc(r.holdD, 1), 9)}  ${padl(r.bbC.toFixed(1), 12)}  ${padl(r.bbP.toFixed(1), 11)}  ${padl(r.profitC.toFixed(0), 9)}  ${padl((r.winC * 100).toFixed(0) + '%', 7)}`);
+  console.log(`${String(r.profile).padEnd(8)}${padl(r.tables, 5)}${padl(r.maxTeam, 10)}${padl(r.company, 11)}${padl(r.players, 8)}   ${padl(pc(r.holdT), 9)}  ${padl(spread, 18)}${hit}  ${padl(pc(r.holdD, 1), 9)}  ${padl(r.bbC.toFixed(1), 12)}  ${padl(r.bbP.toFixed(1), 11)}  ${padl(r.profitC.toFixed(0), 9)}  ${padl((r.winC * 100).toFixed(0) + '%', 7)}`);
 }
 console.log('\nСтроки отсортированы по близости к цели. ✓ — цель попала в 95% ДИ данного прогона.');
 if (args.csv && args.csv !== true) { fs.writeFileSync(args.csv, E.toCsv(rows)); console.log('CSV сохранён:', args.csv); }

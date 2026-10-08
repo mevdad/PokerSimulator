@@ -20,6 +20,7 @@ let importedSeeds = null;          // гены компании, загруже�
     const bb = Math.max(2, Math.round(n('cfgBb', 0.5) * 100));
     const cfg = {
       mode: $('cfgMode').value,
+      playerProfile: $('cfgProfile').value,
       players: Math.max(2, Math.min(1000, Math.round(n('cfgPlayers', 200)))),
       maxTeamPerTable: Math.max(1, Math.min(10, Math.round(n('cfgMaxTeam', 2)))),
       bots: Math.max(2, Math.min(1000, Math.round(n('cfgBots', 200)))),
@@ -49,6 +50,7 @@ let importedSeeds = null;          // гены компании, загруже�
       const c = JSON.parse(localStorage.getItem('pokerArenaCfg2') || 'null');
       if (!c) return;
       if (c.mode) $('cfgMode').value = c.mode;
+      if (c.playerProfile) $('cfgProfile').value = c.playerProfile;
       if (c.players) $('cfgPlayers').value = c.players;
       if (c.maxTeamPerTable) $('cfgMaxTeam').value = c.maxTeamPerTable;
       $('cfgBots').value = c.bots; $('cfgTables').value = c.tables; $('cfgSeats').value = c.seats;
@@ -115,12 +117,12 @@ let importedSeeds = null;          // гены компании, загруже�
     expRows = E.aggregate(expRunner ? expRunner.results : []);
     expRows.sort((a, b) => Math.abs(a.holdT - target) - Math.abs(b.holdT - target));
     const pc = (x, d) => (Number.isFinite(x) ? (x * 100).toFixed(d === undefined ? 2 : d) + '%' : '—');
-    let h = `<thead><tr><th>Столы</th><th>Макс/стол</th><th>Компания</th><th>Игроки</th><th>Доля от оборота</th><th>95% ДИ / sd</th>
+    let h = `<thead><tr><th>Игроки</th><th>Столы</th><th>Макс/стол</th><th>Компания</th><th>Игроков</th><th>Доля от оборота</th><th>95% ДИ / sd</th>
       <th>Доля от закупок</th><th>bb/100 компании</th><th>bb/100 игроков</th><th>Прибыль компании</th><th>Ботов в плюсе</th><th></th></tr></thead><tbody>`;
     expRows.forEach((r, i) => {
       const hit = r.n === 1 && Number.isFinite(r.loT) && target >= r.loT && target <= r.hiT;
       const spread = r.n > 1 ? `±${pc(r.holdTsd)} sd` : `${pc(r.loT, 1)} … ${pc(r.hiT, 1)}`;
-      h += `<tr class="${hit ? 'hit' : ''} ${i === 0 ? 'best' : ''}"><td>${r.tables}</td><td>${r.maxTeam}</td><td>${r.company}</td><td>${r.players}</td>
+      h += `<tr class="${hit ? 'hit' : ''} ${i === 0 ? 'best' : ''}"><td>${({ mixed: 'смешанные', regs: 'сильные', elite: 'элита' })[r.profile] || r.profile}</td><td>${r.tables}</td><td>${r.maxTeam}</td><td>${r.company}</td><td>${r.players}</td>
         <td><b>${pc(r.holdT)}</b></td><td>${spread}</td><td>${pc(r.holdD, 1)}</td><td>${r.bbC.toFixed(1)}</td><td>${r.bbP.toFixed(1)}</td>
         <td>$${r.profitC.toFixed(0)}</td><td>${(r.winC * 100).toFixed(0)}%</td>
         <td><button class="btn watch" data-i="${i}" title="Запустить этот вариант вживую">▶ смотреть</button></td></tr>`;
@@ -144,8 +146,10 @@ let importedSeeds = null;          // гены компании, загруже�
     const o = {
       companies: E.parseList($('expCompany').value, [200]), players: E.parseList($('expPlayers').value, [200]),
       maxTeams: E.parseList($('expMaxTeam').value, [2]), tables: E.parseList($('expTables').value, [cur.tables]),
+      profiles: String($('expProfile').value || 'mixed').split(/[\s,;]+/).filter((x) => ['mixed', 'regs', 'elite'].includes(x)),
       repeats: Math.max(1, Math.min(10, Number($('expRepeats').value) || 1)), seed: cur.seed === undefined ? 1 : cur.seed,
     };
+    if (!o.profiles.length) o.profiles = ['mixed'];
     const sc = E.buildScenarios(o);
     if (sc.length > 80) { $('expInfo').textContent = `Слишком много сценариев (${sc.length}). Уменьшите списки (максимум 80).`; return; }
     const hands = Math.max(2000, Number($('expHands').value) || 30000);
@@ -179,7 +183,7 @@ let importedSeeds = null;          // гены компании, загруже�
       if (!b) return;
       e.preventDefault();
       const r = expRows[Number(b.dataset.i)];
-      $('cfgMode').value = 'versus'; $('cfgBots').value = r.company; $('cfgPlayers').value = r.players;
+      $('cfgMode').value = 'versus'; $('cfgProfile').value = r.profile || 'mixed'; $('cfgBots').value = r.company; $('cfgPlayers').value = r.players;
       $('cfgMaxTeam').value = r.maxTeam; $('cfgTables').value = r.tables; $('cfgSeed').value = r.seed;
       wasRunning = true; $('dlgExp').close(); start(readConfig());
     });
@@ -224,7 +228,7 @@ let importedSeeds = null;          // гены компании, загруже�
     });
     // параметры из адресной строки: ?bots=50&tables=2&seats=9&speed=turbo&seed=1
     const q = new URLSearchParams(location.search);
-    for (const [k, id] of [['bots', 'cfgBots'], ['players', 'cfgPlayers'], ['maxteam', 'cfgMaxTeam'], ['mode', 'cfgMode'], ['rake', 'cfgRake'], ['tables', 'cfgTables'], ['seats', 'cfgSeats'], ['sb', 'cfgSb'], ['bb', 'cfgBb'], ['seed', 'cfgSeed']]) {
+    for (const [k, id] of [['bots', 'cfgBots'], ['players', 'cfgPlayers'], ['maxteam', 'cfgMaxTeam'], ['mode', 'cfgMode'], ['profile', 'cfgProfile'], ['rake', 'cfgRake'], ['tables', 'cfgTables'], ['seats', 'cfgSeats'], ['sb', 'cfgSb'], ['bb', 'cfgBb'], ['seed', 'cfgSeed']]) {
       if (q.has(k)) $(id).value = q.get(k);
     }
     if (q.get('speed')) { $('selSpeed').value = q.get('speed'); speed = q.get('speed') === 'turbo' ? Infinity : Number(q.get('speed')); }

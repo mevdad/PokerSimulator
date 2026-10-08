@@ -13,8 +13,9 @@
   function buildScenarios(o) {
     const out = [];
     const seed = o.seed === undefined ? 1 : o.seed;
-    for (const tables of o.tables) for (const maxTeam of o.maxTeams) for (const company of o.companies) for (const players of o.players) {
-      for (let r = 0; r < o.repeats; r++) out.push({ company, players, maxTeam, tables, repeat: r, seed: (seed + r * 7919) >>> 0 });
+    const profiles = o.profiles || ['mixed'];
+    for (const profile of profiles) for (const tables of o.tables) for (const maxTeam of o.maxTeams) for (const company of o.companies) for (const players of o.players) {
+      for (let r = 0; r < o.repeats; r++) out.push({ company, players, maxTeam, tables, profile, repeat: r, seed: (seed + r * 7919) >>> 0 });
     }
     return out;
   }
@@ -31,6 +32,7 @@
     start(s) {
       const cfg = Object.assign({}, this.base, {
         mode: 'versus', bots: s.company, players: s.players, maxTeamPerTable: s.maxTeam, tables: s.tables, seed: s.seed,
+        playerProfile: s.profile || 'mixed',
       });
       this.cur = s;
       this.sim = new NS.Simulation(cfg);
@@ -40,7 +42,7 @@
       const sim = this.sim, s = this.cur;
       const T = sim.teamStats(), hT = sim.hold('turnover'), hD = sim.hold('drop');
       this.results.push({
-        company: s.company, players: s.players, maxTeam: s.maxTeam, tables: s.tables, repeat: s.repeat, seed: s.seed,
+        company: s.company, players: s.players, maxTeam: s.maxTeam, tables: s.tables, profile: s.profile || 'mixed', repeat: s.repeat, seed: s.seed,
         hands: sim.totalHands,
         holdT: hT.value, loT: hT.lo, hiT: hT.hi, holdD: hD.value,
         bbC: T.company.bb100, bbP: T.player.bb100, profitC: T.company.profit, profitP: T.player.profit,
@@ -69,7 +71,7 @@
   function aggregate(results) {
     const groups = new Map();
     for (const r of results) {
-      const k = [r.tables, r.maxTeam, r.company, r.players].join('|');
+      const k = [r.profile, r.tables, r.maxTeam, r.company, r.players].join('|');
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(r);
     }
@@ -83,10 +85,10 @@
     for (const a of groups.values()) {
       const f = a[0];
       rows.push({
-        tables: f.tables, maxTeam: f.maxTeam, company: f.company, players: f.players, n: a.length,
+        profile: f.profile, tables: f.tables, maxTeam: f.maxTeam, company: f.company, players: f.players, n: a.length,
         holdT: mean(a, (x) => x.holdT), holdTsd: sd(a, (x) => x.holdT),
         loT: mean(a, (x) => x.loT), hiT: mean(a, (x) => x.hiT),
-        holdD: mean(a, (x) => x.holdD), bbC: mean(a, (x) => x.bbC), bbP: mean(a, (x) => x.bbP),
+        holdD: mean(a, (x) => x.holdD), bbC: mean(a, (x) => x.bbC), bbP: mean(a, (x) => x.bbP), bbCsd: sd(a, (x) => x.bbC),
         profitC: mean(a, (x) => x.profitC), flowT: mean(a, (x) => x.flowT), winC: mean(a, (x) => x.winC),
         hands: f.hands, seed: f.seed,
       });
@@ -95,12 +97,12 @@
   }
 
   function toCsv(rows) {
-    const head = ['tables', 'max_company_per_table', 'company_bots', 'players', 'runs', 'hold_turnover_pct', 'hold_turnover_sd_pct',
+    const head = ['profile', 'tables', 'max_company_per_table', 'company_bots', 'players', 'runs', 'hold_turnover_pct', 'hold_turnover_sd_pct',
       'ci_low_pct', 'ci_high_pct', 'hold_drop_pct', 'company_bb100', 'players_bb100', 'company_profit_usd', 'players_turnover_usd', 'company_winners_pct'];
     const p = (x) => (Number.isFinite(x) ? (x * 100).toFixed(3) : '');
     const lines = [head.join(',')];
     for (const r of rows) {
-      lines.push([r.tables, r.maxTeam, r.company, r.players, r.n, p(r.holdT), p(r.holdTsd), p(r.loT), p(r.hiT), p(r.holdD),
+      lines.push([r.profile, r.tables, r.maxTeam, r.company, r.players, r.n, p(r.holdT), p(r.holdTsd), p(r.loT), p(r.hiT), p(r.holdD),
         r.bbC.toFixed(2), r.bbP.toFixed(2), r.profitC.toFixed(2), r.flowT.toFixed(2), (r.winC * 100).toFixed(1)].join(','));
     }
     return lines.join('\n');

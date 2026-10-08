@@ -77,6 +77,7 @@
       ov: { openBase: 0.10, posSlope: 0.05, limpFreq: 0.35, openSize: 2.2, threeBet: 0.03, callRaise: 0.08, cbet: 0.35, valueBet: 0.78, raiseEq: 0.95, betSize: 0.35, bluff: 0, semiBluff: 0.05, callMargin: 0.06, checkRaise: 0.02, slowplay: 0.03 },
     },
     EVO: { label: 'Эволюционер', ov: {} },
+    ELITE: { label: 'Сильный (эволюц.)', ov: {} },
   };
 
   function makeGenome(arch, rng, noise) {

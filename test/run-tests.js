@@ -167,4 +167,19 @@ test('одни и те же seed игроков дают тот же соста�
   assert.strictEqual(a.bots.map((x) => x.seed + x.archetype).join(), b.bots.map((x) => x.seed + x.archetype).join());
 });
 
+test('профили игроков: regs без рыб и маньяков, elite с сильными геномами', () => {
+  const regs = new Simulation({ mode: 'versus', bots: 10, players: 60, playerProfile: 'regs', seed: 4 });
+  const arch = new Set(regs.bots.filter((b) => b.team === 'player').map((b) => b.archetype));
+  assert.ok(!arch.has('FISH') && !arch.has('MANIAC'), 'в regs есть слабые архетипы: ' + [...arch]);
+  const elite = new Simulation({ mode: 'versus', bots: 10, players: 20, playerProfile: 'elite', seed: 4 });
+  assert.ok(elite.bots.filter((b) => b.team === 'player').every((b) => b.archetype === 'ELITE'));
+  elite.runHands(300);
+  assert.ok(elite.totalHands >= 300);
+});
+test('улучшения логики включены только у компании', () => {
+  const sim = new Simulation({ mode: 'versus', bots: 5, players: 5, seed: 2 });
+  assert.ok(sim.bots.filter((b) => b.team === 'company').every((b) => b.tune.shortHanded && b.tune.exploit2));
+  assert.ok(sim.bots.filter((b) => b.team === 'player').every((b) => !b.tune.shortHanded));
+});
+
 console.log(`\nПройдено тестов: ${passed}`);

@@ -26,7 +26,7 @@ if (args.help) {
   --seed N       seed для воспроизводимости
   --fixed X      доля ботов с фиксированным стилем (0.25)
   --versus       режим «команда компании vs игроки со случайными seed»
-  --players N    сколько игроков (200)         --max-team N  макс. ботов компании за столом (2)
+  --players N    сколько игроков (200)   --profile mixed|regs|elite  (состав игроков)         --max-team N  макс. ботов компании за столом (2)
   --seeds FILE   стартовые геномы компании (data/company-seed.json); --no-seeds — без них
   --no-evo       выключить обучение
   --gen N        раздач на поколение (4000)
@@ -38,7 +38,7 @@ const cfg = {
   bots: num('bots', 200), tables: num('tables', 3), seats: num('seats', 6),
   sb: Math.round(num('sb', 0.25) * 100), bb: Math.round(num('bb', 0.5) * 100),
   rakePct: num('rake', args.versus ? 0 : 3) / 100, fixedShare: num('fixed', 0.25),
-  mode: args.versus ? 'versus' : 'solo', players: num('players', 200), maxTeamPerTable: num('max-team', 2),
+  mode: args.versus ? 'versus' : 'solo', players: num('players', 200), playerProfile: args.profile || 'mixed', maxTeamPerTable: num('max-team', 2),
   evolution: !args['no-evo'], genHands: num("gen", 4000),
   seed: args.seed !== undefined ? Number(args.seed) : undefined,
 };

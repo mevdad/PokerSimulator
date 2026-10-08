@@ -145,6 +145,13 @@
     <label>Ботов (компания) <input type="number" id="cfgBots" min="2" max="1000" value="200"></label>
     <label>Игроков (случайные seed) <input type="number" id="cfgPlayers" min="2" max="1000" value="200"></label>
     <label>Макс. ботов компании за столом <input type="number" id="cfgMaxTeam" min="1" max="10" value="2"></label>
+    <label class="wide">Состав игроков
+      <select id="cfgProfile">
+        <option value="mixed">Смешанный: типичный микролимит (много «рыб»)</option>
+        <option value="regs">Сильные: только регуляры TAG/LAG/нит</option>
+        <option value="elite">Элита: лучшие эволюционировавшие боты (равные по силе)</option>
+      </select>
+    </label>
     <label>Столов <input type="number" id="cfgTables" min="1" max="8" value="3"></label>
     <label>Игроков за столом <input type="number" id="cfgSeats" min="2" max="10" value="6"></label>
     <label>Малый блайнд, $ <input type="number" id="cfgSb" min="0.01" step="0.01" value="0.25"></label>
@@ -180,6 +187,7 @@
     <label>Игроков <input id="expPlayers" value="100,200"></label>
     <label>Макс. компании за столом <input id="expMaxTeam" value="1,2,3"></label>
     <label>Столов <input id="expTables" value="3"></label>
+    <label>Состав игроков (mixed, regs, elite) <input id="expProfile" value="mixed,regs"></label>
     <label>Раздач на прогон <input id="expHands" type="number" min="2000" step="1000" value="30000"></label>
     <label>Повторов (разные seed) <input id="expRepeats" type="number" min="1" max="10" value="1"></label>
   </div>

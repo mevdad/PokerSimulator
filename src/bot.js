@@ -40,6 +40,7 @@
       this.cooldown = 0;
       this.tableId = -1;
       this.team = 'solo';           // 'company' | 'player' в режиме «Компания vs Игроки»
+      this.tune = {};               // улучшения логики (только у ботов компании): shortHanded, exploit2, samples
       this.turnover = 0;            // сумма всех ставок бота (центы)
       this.seed = 0;                // персональный seed (у игроков — случайный)
     }
@@ -72,6 +73,10 @@
       const pf = v.posFactor;
       const nR = v.preflop.raises, nL = v.preflop.limpers;
       const mk = (to) => this.raiseAction(v, to);
+      const tn = this.tune;
+      // за короткими столами (3-5 игроков) диапазоны шире, чем за 6-max; за 9-max уже
+      const sh = tn.shortHanded ? clamp(1 + 0.12 * (6 - v.nDealt), 0.8, 1.6) : 1;
+      const shp = Math.pow(sh, 0.7);
 
       if (nR === 0) {
         // --- рейза ещё не было
@@ -81,7 +86,14 @@
           const pct = Math.min(1, pushPct(effBB) * (0.45 + 0.55 * pf) * (nL > 0 ? 0.8 : 1));
           return hp <= pct ? mk(v.maxRaiseTo) : (v.toCall === 0 ? CHECK : FOLD);
         }
-        const openThr = clamp(g.openBase + g.posSlope * pf, 0.03, 0.85);
+        // эксплуатация: против тайтовых игроков за нами (блайнды и т.д.) воруем блайнды шире
+        let steal = 1;
+        if (tn.exploit2) {
+          let sv = 0, c = 0;
+          for (const o of v.opponents) if (!o.hasActed) { sv += o.hud.vpip; c++; }
+          if (c) steal = lerp(1, clamp(1 + (0.27 - sv / c) * 1.6, 0.85, 1.35), g.exploit);
+        }
+        const openThr = clamp((g.openBase + g.posSlope * pf) * sh * steal, 0.03, 0.9);
         if (v.role === 'BB') {
           if (nL > 0 && hp <= openThr * 0.5) return mk((g.openSize + nL) * bb);
           return CHECK;
@@ -120,8 +132,8 @@
       }
 
       if (nR === 1) {
-        const tb = g.threeBet * Math.pow(scale, 0.8);
-        let call = (g.callRaise + (ip ? g.callPosBonus : 0) + (v.role === 'BB' ? g.callPosBonus * 1.2 : 0)) * Math.pow(scale, 0.9);
+        const tb = g.threeBet * Math.pow(scale, 0.8) * shp;
+        let call = (g.callRaise + (ip ? g.callPosBonus : 0) + (v.role === 'BB' ? g.callPosBonus * 1.2 : 0)) * Math.pow(scale, 0.9) * shp;
         call *= clamp(1.35 - priceFrac * 1.6, 0.55, 1.5);
         const size = v.currentBet * (ip ? 3 : 3.8) + nL * bb;
         if (hp <= tb) return mk(size);
@@ -205,15 +217,22 @@
       for (let i = 0; i < nOpp; i++) profs[i] = this.oppProfile(opps[i], v);
 
       const base = v.street === 'flop' ? 150 : v.street === 'turn' ? 190 : 230;
-      let eq = estimateEquity(v.hole, v.board, profs, nOpp > 2 ? Math.round(base * 0.8) : base, rng);
+      const sm = this.tune.samples || 1;
+      let eq = estimateEquity(v.hole, v.board, profs, Math.round((nOpp > 2 ? base * 0.8 : base) * sm), rng);
       eq += (v.inPosition ? 0.012 : -0.025) + rng.gauss() * g.noise * 0.5;
 
       const pot = v.pot, toCall = v.toCall;
       const mw = Math.max(0, nOpp - 1);
-      const vb = g.valueBet + g.multiwayCaution * mw;
+      let vb = g.valueBet + g.multiwayCaution * mw;
       const rEq = g.raiseEq + g.multiwayCaution * mw * 1.2;
       let allFold = 1;
       for (let i = 0; i < nOpp; i++) allFold *= this.foldProb(opps[i]);
+      let sizeAdj = 1;
+      if (this.tune.exploit2) {
+        // против тех, кто редко фолдит ("станции"), ставим тоньше по эквити и крупнее; против фолдящих - меньше
+        vb -= 0.10 * (1 - allFold) * g.exploit * (nOpp === 1 ? 1 : 0.5);
+        sizeAdj = clamp(1 + (0.45 - allFold) * 0.5, 0.85, 1.2);
+      }
       const spr = v.stack / Math.max(pot, 1);
 
       if (toCall === 0) {
@@ -221,7 +240,7 @@
         if (eq >= vb) {
           if (eq >= 0.9 && v.street === 'flop' && nOpp <= 2 && rng.chance(v.inPosition ? g.slowplay : g.checkRaise)) return CHECK;
           if (!v.inPosition && eq < 0.85 && rng.chance(g.checkRaise * 0.4)) return CHECK;
-          return this.betPot(v, eq > 0.85 ? g.bigBetSize : g.betSize);
+          return this.betPot(v, (eq > 0.85 ? g.bigBetSize : g.betSize) * sizeAdj);
         }
         // c-bet: мы были агрессором на префлопе
         if (v.street === 'flop' && v.preflop.aggressorId === this.id && nOpp <= 2) {

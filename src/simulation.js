@@ -9,7 +9,10 @@
     mode: 'solo',           // 'solo' - все боты вместе; 'versus' - команда компании против игроков
     bots: 200,              // solo: всего ботов; versus: ботов компании
     players: 200,           // versus: игроков с рандомными seed
+    playerProfile: 'mixed', // versus: mixed - типичный микролимит с «рыбами»; regs - только регуляры; elite - сильнейшие эволюционировавшие геномы
     maxTeamPerTable: 2,     // versus: максимум ботов компании за одним столом
+    companyTune: { shortHanded: true, exploit2: true, samples: 1 },   // улучшения логики у ботов компании
+    playersTuned: false,    // versus: дать игрокам те же улучшения (контрольный тест на равную силу)
     companySeeds: null,     // versus: стартовые геномы компании (иначе NS.COMPANY_SEEDS)
     tables: 3,
     seats: 6,
@@ -35,6 +38,8 @@
   const FIXED_MIX = [['FISH', 0.32], ['NIT', 0.18], ['MANIAC', 0.12], ['ROCK', 0.14], ['LAG', 0.1], ['TAG', 0.14]];
   // состав «игроков» из потока: типичный микролимит (много любителей, немного регуляров)
   const PLAYER_MIX = [['FISH', 0.35], ['TAG', 0.2], ['ROCK', 0.12], ['NIT', 0.1], ['LAG', 0.12], ['MANIAC', 0.11]];
+  // сильное поле: без рыб и маньяков, в основном TAG/LAG с малым шумом в генах
+  const REG_MIX = [['TAG', 0.55], ['LAG', 0.3], ['NIT', 0.1], ['ROCK', 0.05]];
 
   function weightedPick(mix, rng) {
     let r = rng.next(), acc = 0;
@@ -133,16 +138,30 @@
         }
         const bot = this.makeBot(i, names[i], genome, 'EVO', false, (rng.seed ^ Math.imul(i + 1, 2654435761)) >>> 0);
         bot.team = 'company';
+        bot.tune = Object.assign({}, c.companyTune);
       }
+      const profile = c.playerProfile || 'mixed';
+      const elite = (c.eliteSeeds && c.eliteSeeds.length ? c.eliteSeeds : (NS.ELITE_SEEDS && NS.ELITE_SEEDS.length ? NS.ELITE_SEEDS : seeds)) || [];
       for (let j = 0; j < nP; j++) {
         const id = nC + j;
         const seed = rng.int(4294967296);        // случайный seed игрока определяет весь его стиль
         const pr = new RNG(seed);
-        const arch = weightedPick(PLAYER_MIX, pr);
-        const genome = Genome.makeGenome(arch, pr, 0.03 + pr.next() * 0.17);
-        genome.buyIn = pr.range(c.minBuyBB, c.maxBuyBB);
+        let arch, genome;
+        if (profile === 'elite' && elite.length) {
+          arch = 'ELITE';
+          genome = Genome.mutate(Object.assign(Genome.defaultGenome(), elite[pr.int(elite.length)]), pr, 0.2, 0.02);
+        } else if (profile === 'regs') {
+          arch = weightedPick(REG_MIX, pr);
+          genome = Genome.makeGenome(arch, pr, 0.02 + pr.next() * 0.05);
+          genome.buyIn = pr.range(Math.max(c.minBuyBB, 60), c.maxBuyBB);
+        } else {
+          arch = weightedPick(PLAYER_MIX, pr);
+          genome = Genome.makeGenome(arch, pr, 0.03 + pr.next() * 0.17);
+          genome.buyIn = pr.range(c.minBuyBB, c.maxBuyBB);
+        }
         const bot = this.makeBot(id, names[id], genome, arch, true, seed);
         bot.team = 'player';
+        if (c.playersTuned) bot.tune = Object.assign({}, c.companyTune);
       }
     }
 
