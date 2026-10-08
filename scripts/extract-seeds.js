@@ -5,9 +5,12 @@ const fs = require('fs');
 const path = require('path');
 const src = process.argv[2];
 const top = Number(process.argv[3] || 60);
-if (!src) { console.error('Использование: node scripts/extract-seeds.js results.json [сколько]'); process.exit(1); }
+const minHands = Number(process.argv[4] || 800);     // минимум раздач у бота
+const minBb100 = Number(process.argv[5] || 3);       // минимум bb/100 (со сжатием на малую выборку)
+const teamOnly = process.argv[6] || '';              // 'company' - брать только ботов компании
+if (!src) { console.error('Использование: node scripts/extract-seeds.js results.json [сколько] [мин.раздач] [мин.bb/100] [company]'); process.exit(1); }
 const d = JSON.parse(fs.readFileSync(src, 'utf8'));
-const pool = d.bots.filter((b) => !b.fixed && b.hands >= 800 && b.bb100s > 3 && b.genome).sort((a, b) => b.bb100s - a.bb100s).slice(0, top);
+const pool = d.bots.filter((b) => !b.fixed && b.hands >= minHands && b.bb100s > minBb100 && b.genome && (!teamOnly || b.team === teamOnly)).sort((a, b) => b.bb100s - a.bb100s).slice(0, top);
 const out = {
   source: { totalHands: d.totalHands, generation: d.generation, seed: d.config && d.config.seed },
   genomes: pool.map((b) => b.genome),

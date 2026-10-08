@@ -28,11 +28,14 @@
     learnShare: 0.15,       // какая доля худших ботов перенимает стиль лучших
     mutationRate: 0.35,
     mutationSigma: 0.08,
+    crossoverProb: 1,       // вероятность смешать гены двух родителей (иначе - клон лучшего + мутация)
     minWindowHands: 250,
     snapshotEvery: 250,
     seed: undefined,
     debug: false,
   };
+
+  const VERSUS_EVOLUTION = { crossoverProb: 0.25, mutationRate: 0.15, mutationSigma: 0.04, learnShare: 0.08 };
 
   // состав фиксированных ботов ("рыбы" и разные типы для эксплуатации)
   const FIXED_MIX = [['FISH', 0.32], ['NIT', 0.18], ['MANIAC', 0.12], ['ROCK', 0.14], ['LAG', 0.1], ['TAG', 0.14]];
@@ -54,6 +57,8 @@
       const c = this.cfg;
       // в режиме «компания vs игроки» рейк по умолчанию выключен: прибыль компании = деньги игроков
       if (c.mode === 'versus' && given.rakePct === undefined) c.rakePct = 0;
+      // консервативная эволюция для компании: клон лучшего + мелкая мутация (потомки при смешивании генов получались хуже родителей)
+      if (c.mode === 'versus') for (const [k, v] of Object.entries(VERSUS_EVOLUTION)) if (given[k] === undefined) c[k] = v;
       c.rakeCap = Math.round(c.rakeCapBB * c.bb);
       this.versus = c.mode === 'versus';
       this.rng = new RNG(c.seed);
@@ -292,7 +297,8 @@
       for (const b of learners) {
         const p1 = pickTop(); let p2 = pickTop();
         if (p2 === p1 && top.length > 1) p2 = top[(top.indexOf(p1) + 1) % top.length];
-        const child = Genome.mutate(Genome.crossover(p1.genome, p2.genome, rng), rng, c.mutationRate, c.mutationSigma);
+        const base = rng.chance(c.crossoverProb) ? Genome.crossover(p1.genome, p2.genome, rng) : p1.genome;
+        const child = Genome.mutate(base, rng, c.mutationRate, c.mutationSigma);
         child.buyIn = clamp(child.buyIn, c.minBuyBB, c.maxBuyBB);
         b.genome = child;
         b.generation++;
