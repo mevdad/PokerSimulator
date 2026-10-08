@@ -39,6 +39,9 @@
       this.waitSince = 0;
       this.cooldown = 0;
       this.tableId = -1;
+      this.team = 'solo';           // 'company' | 'player' в режиме «Компания vs Игроки»
+      this.turnover = 0;            // сумма всех ставок бота (центы)
+      this.seed = 0;                // персональный seed (у игроков — случайный)
     }
 
     get stack() { return this.seatRef ? this.seatRef.stack : 0; }

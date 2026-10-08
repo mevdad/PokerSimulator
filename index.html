@@ -31,6 +31,7 @@
     </label>
     <label class="check"><input type="checkbox" id="chkCards" checked> Карты ботов</label>
     <button id="btnSettings" class="btn">⚙ Настройки</button>
+    <button id="btnExp" class="btn" title="Перебрать варианты числа ботов компании, игроков, столов">🧪 Эксперименты</button>
     <button id="btnExport" class="btn" title="Скачать рейтинг и гены ботов в JSON">⭳ JSON</button>
   </div>
 
@@ -52,12 +53,39 @@
   </section>
 
   <aside class="right">
+    <div class="panel" id="teamPanel" style="display:none">
+      <div class="panel-title">
+        Компания vs Игроки
+        <span class="filters">
+          <select id="selFlow" title="Что считать потоком денег игроков">
+            <option value="turnover">поток = оборот игроков</option>
+            <option value="drop">поток = закупки игроков</option>
+          </select>
+          <label class="target">цель <input id="inpTarget" type="number" min="0.1" max="50" step="0.1" value="3">%</label>
+        </span>
+      </div>
+      <div class="hold-main">
+        <div class="hold-num"><span id="holdValue">—</span><small id="holdLabel">доля компании от потока игроков</small></div>
+        <div class="hold-side">
+          <span id="holdStatus" class="status">мало данных</span>
+          <div id="holdCI" class="muted">—</div>
+          <div class="gauge"><i id="gaugeBar"></i><b class="mark"></b></div>
+          <div class="gauge-scale muted"><span>0</span><span id="gaugeTarget">цель 3%</span><span>2×</span></div>
+        </div>
+      </div>
+      <div id="teamTable" class="team-table"></div>
+      <canvas id="chartHold" height="150"></canvas>
+      <canvas id="chartTeams" height="150" style="margin-top:8px"></canvas>
+    </div>
+
     <div class="panel">
       <div class="panel-title">
         Рейтинг игроков
         <span class="filters">
           <select id="selFilter">
             <option value="all">все</option>
+            <option value="company">компания</option>
+            <option value="player">игроки</option>
             <option value="evo">эволюционеры</option>
             <option value="fixed">фикс. стили</option>
             <option value="playing">за столами</option>
@@ -108,24 +136,61 @@
   <h2>Настройки симуляции</h2>
   <p class="muted">Изменения применяются при перезапуске: все боты начнут с нуля.</p>
   <div class="grid-form" id="settingsForm">
-    <label>Ботов <input type="number" id="cfgBots" min="2" max="1000" value="200"></label>
+    <label class="wide">Режим
+      <select id="cfgMode">
+        <option value="versus">Команда компании vs Игроки (200 + 200)</option>
+        <option value="solo">Все боты вместе (с фиксированными стилями)</option>
+      </select>
+    </label>
+    <label>Ботов (компания) <input type="number" id="cfgBots" min="2" max="1000" value="200"></label>
+    <label>Игроков (случайные seed) <input type="number" id="cfgPlayers" min="2" max="1000" value="200"></label>
+    <label>Макс. ботов компании за столом <input type="number" id="cfgMaxTeam" min="1" max="10" value="2"></label>
     <label>Столов <input type="number" id="cfgTables" min="1" max="8" value="3"></label>
     <label>Игроков за столом <input type="number" id="cfgSeats" min="2" max="10" value="6"></label>
     <label>Малый блайнд, $ <input type="number" id="cfgSb" min="0.01" step="0.01" value="0.25"></label>
     <label>Большой блайнд, $ <input type="number" id="cfgBb" min="0.02" step="0.01" value="0.5"></label>
     <label>Мин. закупка, ББ <input type="number" id="cfgMinBuy" min="5" max="200" value="20"></label>
     <label>Макс. закупка, ББ <input type="number" id="cfgMaxBuy" min="20" max="500" value="100"></label>
-    <label>Рейк, % <input type="number" id="cfgRake" min="0" max="10" step="0.5" value="3"></label>
+    <label>Рейк, % (в режиме vs по умолч. 0) <input type="number" id="cfgRake" min="0" max="10" step="0.5" value="0"></label>
     <label>Лимит рейка, ББ <input type="number" id="cfgRakeCap" min="0" max="10" step="0.5" value="3"></label>
-    <label>Фикс. стили (рыбы и др.), % <input type="number" id="cfgFixed" min="0" max="90" value="25"></label>
+    <label>Фикс. стили (только solo), % <input type="number" id="cfgFixed" min="0" max="90" value="25"></label>
     <label>Раздач на поколение <input type="number" id="cfgGen" min="500" max="100000" step="500" value="4000"></label>
     <label>Seed (пусто = случайный) <input type="number" id="cfgSeed" placeholder="случайный"></label>
     <label class="check wide"><input type="checkbox" id="cfgEvo" checked> Включить обучение ботов (эволюция стратегий)</label>
+    <label class="wide">Стартовые гены компании: загрузить JSON из «⭳ JSON» (по умолчанию — лучшие боты вашего прогона)
+      <input type="file" id="cfgSeedFile" accept="application/json,.json">
+    </label>
+    <div class="wide muted" id="seedInfo"></div>
   </div>
   <div class="dlg-actions">
     <button id="btnApply" class="btn primary">▶ Применить и перезапустить</button>
     <button id="btnDefaults" class="btn">Сбросить значения</button>
   </div>
+</dialog>
+
+<!-- Эксперименты -->
+<dialog id="dlgExp" class="dlg wide">
+  <form method="dialog" class="dlg-close"><button class="btn">✕</button></form>
+  <h2>Эксперименты: сколько ботов компании и игроков нужно для цели</h2>
+  <p class="muted">Каждый вариант — отдельная симуляция без анимации. Списки через запятую: перебираются все сочетания.
+    Базовые настройки (места, блайнды, рейк, обучение) берутся из «⚙ Настройки». Реально на деньги влияют занятые места:
+    столы × места × лимит компании за столом; размер пула ботов задаёт разнообразие и ротацию.</p>
+  <div class="grid-form exp-form">
+    <label>Ботов компании <input id="expCompany" value="100,200"></label>
+    <label>Игроков <input id="expPlayers" value="100,200"></label>
+    <label>Макс. компании за столом <input id="expMaxTeam" value="1,2,3"></label>
+    <label>Столов <input id="expTables" value="3"></label>
+    <label>Раздач на прогон <input id="expHands" type="number" min="2000" step="1000" value="30000"></label>
+    <label>Повторов (разные seed) <input id="expRepeats" type="number" min="1" max="10" value="1"></label>
+  </div>
+  <div class="dlg-actions">
+    <button id="expRun" class="btn primary">▶ Запустить перебор</button>
+    <button id="expStop" class="btn" disabled>■ Остановить</button>
+    <button id="expCsv" class="btn" disabled>⭳ CSV</button>
+    <span id="expInfo" class="muted"></span>
+  </div>
+  <div class="progress"><i id="expBar"></i></div>
+  <div class="exp-wrap"><table id="expTable" class="exp-table"></table></div>
 </dialog>
 
 <script src="src/rng.js"></script>
@@ -136,9 +201,11 @@
 <script src="src/stats.js"></script>
 <script src="src/names.js"></script>
 <script src="src/genome.js"></script>
+<script src="data/company-seed.js"></script>
 <script src="src/bot.js"></script>
 <script src="src/table.js"></script>
 <script src="src/simulation.js"></script>
+<script src="src/experiments.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/main.js"></script>
 </body>

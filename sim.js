@@ -25,6 +25,9 @@ if (args.help) {
   --rake X       рейк, % (3)
   --seed N       seed для воспроизводимости
   --fixed X      доля ботов с фиксированным стилем (0.25)
+  --versus       режим «команда компании vs игроки со случайными seed»
+  --players N    сколько игроков (200)         --max-team N  макс. ботов компании за столом (2)
+  --seeds FILE   стартовые геномы компании (data/company-seed.json); --no-seeds — без них
   --no-evo       выключить обучение
   --gen N        раздач на поколение (4000)
   --top N        сколько строк рейтинга печатать (15)`);
@@ -34,13 +37,17 @@ if (args.help) {
 const cfg = {
   bots: num('bots', 200), tables: num('tables', 3), seats: num('seats', 6),
   sb: Math.round(num('sb', 0.25) * 100), bb: Math.round(num('bb', 0.5) * 100),
-  rakePct: num('rake', 3) / 100, fixedShare: num('fixed', 0.25),
+  rakePct: num('rake', args.versus ? 0 : 3) / 100, fixedShare: num('fixed', 0.25),
+  mode: args.versus ? 'versus' : 'solo', players: num('players', 200), maxTeamPerTable: num('max-team', 2),
   evolution: !args['no-evo'], genHands: num("gen", 4000),
   seed: args.seed !== undefined ? Number(args.seed) : undefined,
 };
+if (args.seeds && args.seeds !== true) cfg.companySeeds = require('fs').existsSync(args.seeds) ? JSON.parse(require('fs').readFileSync(args.seeds, 'utf8')).genomes : [];
+if (args['no-seeds']) cfg.companySeeds = [];
 const hands = num('hands', 20000);
 const sim = new NS.Simulation(cfg);
-console.log(`Старт: ${cfg.bots} ботов, ${cfg.tables} стола(ов) по ${cfg.seats} мест, NL${cfg.bb / 100 * 100} ($${cfg.sb / 100}/$${cfg.bb / 100}), seed=${sim.cfg.seed}`);
+if (args['no-seeds']) NS.COMPANY_SEEDS = [];
+console.log(`Старт: ${cfg.bots} ботов${cfg.mode === 'versus' ? ' компании + ' + cfg.players + ' игроков' : ''}, ${cfg.tables} стола(ов) по ${cfg.seats} мест, NL${cfg.bb / 100 * 100} ($${cfg.sb / 100}/$${cfg.bb / 100}), seed=${sim.cfg.seed}`);
 
 const t0 = Date.now();
 let lastPrint = 0;
@@ -81,4 +88,19 @@ console.log(`\nРейк собран: $${tot.rake.toFixed(2)}, поколени�
 if (sim.evoLog.length > 1) {
   const f = sim.evoLog[0], l = sim.evoLog[sim.evoLog.length - 1];
   console.log(`Эволюция: VPIP ${(f.vpip * 100).toFixed(1)}% -> ${(l.vpip * 100).toFixed(1)}%, PFR ${(f.pfr * 100).toFixed(1)}% -> ${(l.pfr * 100).toFixed(1)}%, блеф-ген ${f.bluff.toFixed(2)} -> ${l.bluff.toFixed(2)}`);
+}
+
+if (sim.versus) {
+  const T = sim.teamStats();
+  const m = (x) => (x < 0 ? '-$' : '$') + Math.abs(x).toFixed(0);
+  console.log('\n=== Компания vs Игроки ===');
+  for (const [k, lab] of [['company', 'Компания'], ['player', 'Игроки']]) {
+    const t = T[k];
+    console.log(`${pad(lab, 9)} ботов ${padl(t.n, 3)}  прибыль ${padl(m(t.profit), 8)}  ${padl(t.bb100.toFixed(1), 6)} bb/100  оборот ${padl(m(t.turnover), 9)}  закупки ${padl(m(t.drop), 8)}  рейк ${padl(m(t.rake), 6)}  VPIP/PFR ${(t.vpip * 100).toFixed(0)}/${(t.pfr * 100).toFixed(0)}  в плюсе ${(t.winShare * 100).toFixed(0)}%`);
+  }
+  for (const [d, lab] of [['turnover', 'от оборота игроков'], ['drop', 'от закупок игроков']]) {
+    const h = sim.hold(d);
+    const ci = Number.isFinite(h.lo) ? `  95% ДИ ${(h.lo * 100).toFixed(2)}% … ${(h.hi * 100).toFixed(2)}%` : '';
+    console.log(`Доля компании ${pad(lab, 20)} ${(h.value * 100).toFixed(2)}%${ci}`);
+  }
 }

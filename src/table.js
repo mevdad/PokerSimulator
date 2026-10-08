@@ -512,7 +512,7 @@
         if (s.vpipF) st.vpip++;
         if (s.pfrF) st.pfr++;
         const b = s.bot;
-        b.hands++; b.netBB += s.result / bb;
+        b.hands++; b.netBB += s.result / bb; b.turnover += s.committed;
         b.window.hands++; b.window.netBB += s.result / bb;
         b.session.hands++;
         if (s.result > b.bigWin) b.bigWin = s.result;

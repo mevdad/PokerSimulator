@@ -45,6 +45,7 @@ button, select, input { font: inherit; color: inherit; }
 .panel-title small { color: var(--muted); font-weight: 400; }
 .filters { display: flex; gap: 6px; }
 .filters select, .filters input { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; width: 110px; }
+.filters #selFlow { width: 190px; }
 
 /* ---------- столы ---------- */
 .tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; margin-bottom: 14px; }
@@ -160,3 +161,45 @@ canvas { width: 100%; display: block; background: #121821; border-radius: 8px; b
 .table-card.dense .seat .tag { font-size: 9px; }
 .table-card.dense .card.sm { width: 21px; height: 30px; font-size: 11px; }
 .table-card.dense .card.sm .s { font-size: 11px; }
+
+/* ---------- компания vs игроки ---------- */
+.seat.tc .plate { box-shadow: inset 0 -3px 0 #3b82f6; }
+.seat.tp .plate { box-shadow: inset 0 -3px 0 #6b7280; }
+.seat.tc.acting .plate, .seat.tc.winner .plate { box-shadow: inset 0 -3px 0 #3b82f6, 0 0 12px rgba(245,185,66,.7); }
+.tm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.tm.c { background: #3b82f6; }
+.tm.p { background: #6b7280; }
+.target { display: flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 400; }
+.target input { width: 54px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.hold-main { display: grid; grid-template-columns: 190px 1fr; gap: 14px; align-items: center; margin-bottom: 10px; }
+.hold-num span { display: block; font-size: 38px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--accent); }
+.hold-num small { color: var(--muted); font-size: 11.5px; }
+.status { display: inline-block; padding: 1px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #2a3442; color: #c6d0de; }
+.status.ok { background: #14452c; color: #7ff0b0; }
+.status.hi { background: #4a3a12; color: #ffd479; }
+.status.lo { background: #432020; color: #ff9d9d; }
+.gauge { position: relative; height: 8px; background: #26303f; border-radius: 4px; margin-top: 8px; }
+.gauge i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #2a6fdb, #8b5cf6); }
+.gauge .mark { position: absolute; left: 50%; top: -3px; width: 2px; height: 14px; background: #fff; }
+.gauge-scale { display: flex; justify-content: space-between; font-size: 10.5px; margin-top: 2px; }
+.team-table { width: 100%; font-size: 12.5px; margin-bottom: 10px; }
+.team-table table { width: 100%; border-collapse: collapse; }
+.team-table th { text-align: right; color: var(--muted); font-weight: 500; padding: 3px 6px; }
+.team-table th:first-child, .team-table td:first-child { text-align: left; }
+.team-table td { text-align: right; padding: 3px 6px; border-top: 1px solid #202a37; font-variant-numeric: tabular-nums; }
+.team-table td:first-child { color: var(--muted); }
+.team-table .c-col { color: #8fb8ff; }
+
+/* ---------- эксперименты ---------- */
+.dlg.wide { width: min(1080px, 96vw); }
+.exp-form { grid-template-columns: repeat(3, 1fr); }
+.progress { height: 6px; background: #26303f; border-radius: 3px; margin: 10px 0; overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #2a6fdb, #8b5cf6); transition: width .2s; }
+.exp-wrap { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.exp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.exp-table th { position: sticky; top: 0; background: var(--panel2); padding: 6px 8px; text-align: right; white-space: nowrap; }
+.exp-table td { padding: 5px 8px; border-top: 1px solid #202a37; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.exp-table th:first-child, .exp-table td:first-child { text-align: left; }
+.exp-table tr.hit td { background: rgba(47,191,113,.12); }
+.exp-table tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.exp-table .watch { padding: 1px 8px; font-size: 11.5px; }

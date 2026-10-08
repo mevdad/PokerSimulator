@@ -136,4 +136,35 @@ test('эволюция запускается и меняет гены слаб�
   assert.ok(sim.bots.some((b) => b.generation > 0));
 });
 
+console.log('Режим «Компания vs Игроки»');
+test('составы, лимит ботов компании за столом, сохранение денег', () => {
+  const sim = new Simulation({ mode: 'versus', bots: 40, players: 40, maxTeamPerTable: 2, tables: 3, seats: 6, seed: 21, debug: true, genHands: 600, minWindowHands: 30 });
+  assert.strictEqual(sim.bots.filter((b) => b.team === 'company').length, 40);
+  assert.strictEqual(sim.bots.filter((b) => b.team === 'player').length, 40);
+  assert.ok(sim.bots.filter((b) => b.team === 'player').every((b) => b.fixed && b.seed > 0));
+  assert.strictEqual(sim.cfg.rakePct, 0);
+  let maxC = 0;
+  for (let i = 0; i < 40000 && sim.totalHands < 2500; i++) {
+    for (const t of sim.tables) {
+      t.step();
+      const c = t.seats.filter((s) => s && s.bot.team === 'company').length;
+      if (c > maxC) maxC = c;
+    }
+  }
+  assert.ok(sim.totalHands >= 2500);
+  assert.ok(maxC <= 2, 'за столом было ботов компании: ' + maxC);
+  const T = sim.teamTotals();
+  let inPlay = 0;
+  for (const t of sim.tables) if (t.phase === 'betting' || t.phase === 'dealing' || t.phase === 'showdown') for (const s of t.seats) if (s && s.inHand) inPlay += s.committed;
+  // без рейка то, что выиграла компания, проиграли игроки (с точностью до фишек в играющихся раздачах)
+  assert.ok(Math.abs(T.company.profit + T.player.profit) * 100 <= inPlay + 1, `c=${T.company.profit} p=${T.player.profit} inPlay=${inPlay}`);
+  const h = sim.hold('turnover');
+  assert.ok(Number.isFinite(h.value) && h.flow > 0);
+  assert.ok(sim.generation >= 1 && sim.bots.filter((b) => b.team === 'player').every((b) => b.generation === 0), 'учатся только боты компании');
+});
+test('одни и те же seed игроков дают тот же состав', () => {
+  const a = new Simulation({ mode: 'versus', bots: 10, players: 30, seed: 8 }), b = new Simulation({ mode: 'versus', bots: 10, players: 30, seed: 8 });
+  assert.strictEqual(a.bots.map((x) => x.seed + x.archetype).join(), b.bots.map((x) => x.seed + x.archetype).join());
+});
+
 console.log(`\nПройдено тестов: ${passed}`);

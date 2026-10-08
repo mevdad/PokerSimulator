@@ -102,6 +102,7 @@
         if (acting) cls.push('acting');
         if (winner) cls.push('winner');
         if (t.button === i && s.inHand) cls.push('btn');
+        if (bot.team === 'company') cls.push('tc'); else if (bot.team === 'player') cls.push('tp');
         setCls(r.root, cls.join(' '));
         setText(r.name, bot.name);
         setText(r.stack, money(s.stack));
@@ -215,6 +216,8 @@
     bindStatic() {
       $('chkCards').addEventListener('change', (e) => { this.showCards = e.target.checked; });
       $('selFilter').addEventListener('change', () => this.renderBoard(true));
+      $('selFlow').addEventListener('change', () => { this.renderTeam(); this.renderCharts(); });
+      $('inpTarget').addEventListener('input', () => { this.renderTeam(); this.renderCharts(); });
       $('inpSearch').addEventListener('input', () => this.renderBoard(true));
       document.querySelectorAll('#board th').forEach((th) => th.addEventListener('click', () => {
         const k = th.dataset.sort;
@@ -237,9 +240,10 @@
       host.innerHTML = '';
       this.views = sim.tables.map((t) => { const v = new TableView(t, this); host.appendChild(v.el); return v; });
       const c = sim.cfg;
-      $('subtitle').textContent = `NL${c.bb} · $${(c.sb / 100).toFixed(2)}/$${(c.bb / 100).toFixed(2)} · ${c.bots} ботов · ${c.tables} стол(а) × ${c.seats} мест · рейк ${(c.rakePct * 100).toFixed(1)}%`;
+      $('subtitle').textContent = `NL${c.bb} · $${(c.sb / 100).toFixed(2)}/$${(c.bb / 100).toFixed(2)} · ` + (sim.versus ? `${c.bots} ботов компании vs ${c.players} игроков` : `${c.bots} ботов`) + ` · ${c.tables} стол(а) × ${c.seats} мест · рейк ${(c.rakePct * 100).toFixed(1)}%`;
       this.lastEvents = -1;
-      this.renderBoard(true); this.renderCharts(); this.renderEvents(true);
+      $('teamPanel').style.display = sim.versus ? '' : 'none';
+      this.renderBoard(true); this.renderCharts(); this.renderEvents(true); this.renderTeam();
     }
 
     frame(now) {
@@ -248,7 +252,7 @@
       setText($('kHands'), sim.totalHands.toLocaleString('ru-RU'));
       setText($('kGen'), String(sim.generation));
       setText($('kRake'), '$' + sim.totals().rake.toFixed(0));
-      if (now - this.lastBoard > 900) { this.lastBoard = now; this.renderBoard(false); this.renderEvents(false); if (this.botOpen) this.renderBot(); }
+      if (now - this.lastBoard > 900) { this.lastBoard = now; this.renderBoard(false); this.renderEvents(false); this.renderTeam(); if (this.botOpen) this.renderBot(); }
       if (now - this.lastCharts > 2000) { this.lastCharts = now; this.renderCharts(); }
     }
 
@@ -263,6 +267,8 @@
       if (f === 'evo') rows = rows.filter((r) => !r.fixed);
       else if (f === 'fixed') rows = rows.filter((r) => r.fixed);
       else if (f === 'playing') rows = rows.filter((r) => r.table >= 0);
+      else if (f === 'company') rows = rows.filter((r) => r.team === 'company');
+      else if (f === 'player') rows = rows.filter((r) => r.team === 'player');
       if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.style.toLowerCase().includes(q) || r.archLabel.toLowerCase().includes(q));
       const k = this.sortKey, d = this.sortDir;
       rows.sort((a, b) => {
@@ -279,7 +285,7 @@
         const tdot = r.table >= 0 ? `<span class="tdot" style="background:${COLORS[r.table % COLORS.length]}"></span>${r.table + 1}` : '<span class="muted">—</span>';
         html += `<tr class="${cls}" data-id="${r.id}">
           <td>${rk}</td>
-          <td>${esc(r.name)} ${r.fixed ? '<span class="pill fixed" title="Фиксированный стиль, не обучается">' + esc(r.archLabel) + '</span>' : r.gen ? '<span class="pill" title="Сколько раз перенимал стиль лидеров">g' + r.gen + '</span>' : ''}</td>
+          <td>${r.team === 'company' ? '<span class="tm c" title="Команда компании"></span>' : r.team === 'player' ? '<span class="tm p" title="Игрок"></span>' : ''}${esc(r.name)} ${r.fixed && r.team !== 'player' ? '<span class="pill fixed" title="Фиксированный стиль, не обучается">' + esc(r.archLabel) + '</span>' : r.gen ? '<span class="pill" title="Сколько раз перенимал стиль лидеров">g' + r.gen + '</span>' : ''}</td>
           <td>${esc(r.style)}</td>
           <td><span class="pill ${r.strategy.toLowerCase()}">${r.strategy}</span></td>
           <td class="num ${r.profit >= 0 ? 'pos-n' : 'neg-n'}">${fmt(r.profit)}</td>
@@ -302,6 +308,7 @@
     // ------------------------------------------------------------ графики
     renderCharts() {
       const sim = this.sim, hist = sim.history;
+      this.renderTeamCharts();
       if (hist.length > 1) {
         const last = hist[hist.length - 1].p;
         const idx = Array.from(last.keys()).sort((a, b) => last[b] - last[a]).slice(0, 5);
@@ -322,6 +329,67 @@
           { name: 'агрессия', color: '#c77dff', x, y: evo.map((e) => e.afq * 100) },
         ], { height: 150, legend: true, yfmt: (v) => v.toFixed(0) + '%', xfmt: (v) => 'пок. ' + v });
       } else drawLines($('chartEvo'), [], { height: 150 });
+    }
+
+    // ------------------------------------------------------ компания vs игроки
+    renderTeam() {
+      const sim = this.sim;
+      if (!sim || !sim.versus) return;
+      const def = $('selFlow').value;
+      const target = (Number($('inpTarget').value) || 3) / 100;
+      const T = sim.teamStats(), H = sim.hold(def);
+      const pct = (x, d) => (Number.isFinite(x) ? (x * 100).toFixed(d === undefined ? 2 : d) + '%' : '—');
+      setText($('holdValue'), pct(H.value));
+      setText($('holdLabel'), def === 'drop' ? 'прибыль компании / закупки игроков' : 'прибыль компании / оборот игроков');
+      let st = 'мало данных', cls = 'status';
+      if (Number.isFinite(H.lo)) {
+        if (target >= H.lo && target <= H.hi) { st = 'цель в пределах ДИ'; cls = 'status ok'; }
+        else if (H.mean > target) { st = 'выше цели'; cls = 'status hi'; }
+        else { st = 'ниже цели'; cls = 'status lo'; }
+      }
+      setText($('holdStatus'), st); setCls($('holdStatus'), cls);
+      setText($('holdCI'), Number.isFinite(H.lo) ? `95% ДИ: ${pct(H.lo)} … ${pct(H.hi)} (по ${H.batches} отрезкам)` : 'доверительный интервал появится после ~6 000 раздач');
+      const g = Number.isFinite(H.value) ? Math.max(0, Math.min(100, (H.value / (2 * target)) * 100)) : 0;
+      $('gaugeBar').style.width = g + '%';
+      setText($('gaugeTarget'), 'цель ' + (target * 100).toFixed(1) + '%');
+      const C = T.company, P = T.player, m = (x) => (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+      const row = (label, a, b) => `<tr><td>${label}</td><td class="c-col">${a}</td><td>${b}</td></tr>`;
+      setHtml($('teamTable'), `<table><thead><tr><th></th><th>Компания</th><th>Игроки</th></tr></thead><tbody>
+        ${row('Ботов', C.n, P.n)}
+        ${row('Прибыль', m(C.profit), m(P.profit))}
+        ${row('bb/100', fmt(C.bb100, 1), fmt(P.bb100, 1))}
+        ${row('Игрок-рук', C.hands.toLocaleString('ru-RU'), P.hands.toLocaleString('ru-RU'))}
+        ${row('Оборот (все ставки)', m(C.turnover), m(P.turnover))}
+        ${row('Закупки (drop)', m(C.drop), m(P.drop))}
+        ${row('Рейк заплачен', m(C.rake), m(P.rake))}
+        ${row('VPIP / PFR', (C.vpip * 100).toFixed(0) + ' / ' + (C.pfr * 100).toFixed(0), (P.vpip * 100).toFixed(0) + ' / ' + (P.pfr * 100).toFixed(0))}
+        ${row('Ботов в плюсе', (C.winShare * 100).toFixed(0) + '%', (P.winShare * 100).toFixed(0) + '%')}
+        ${row('Медиана / лучший / худший', m(C.median) + ' / ' + m(C.best) + ' / ' + m(C.worst), m(P.median) + ' / ' + m(P.best) + ' / ' + m(P.worst))}
+      </tbody></table>`);
+    }
+
+    renderTeamCharts() {
+      const sim = this.sim;
+      if (!sim.versus) return;
+      const def = $('selFlow').value;
+      const target = (Number($('inpTarget').value) || 3);
+      const H = sim.hold(def);
+      const ser = H.series.filter((p) => Number.isFinite(p.v) && p.h >= sim.cfg.snapshotEvery * 4);
+      if (ser.length > 1) {
+        const x = ser.map((p) => p.h);
+        drawLines($('chartHold'), [
+          { name: 'доля компании, %', color: '#f5b942', x, y: ser.map((p) => p.v * 100), width: 2 },
+          { name: 'цель', color: '#ffffff', dash: [5, 4], width: 1.2, x: [x[0], x[x.length - 1]], y: [target, target] },
+        ], { height: 150, legend: true, yfmt: (v) => v.toFixed(1) + '%', xfmt: (v) => Math.round(v / 1000) + 'k рук' });
+      } else drawLines($('chartHold'), [], { height: 150 });
+      const hs = sim.history.filter((e) => e.t);
+      if (hs.length > 1) {
+        const x = hs.map((e) => e.h);
+        drawLines($('chartTeams'), [
+          { name: 'прибыль компании', color: '#3b82f6', x, y: hs.map((e) => e.t.cp), width: 2 },
+          { name: 'прибыль игроков', color: '#9ca3af', x, y: hs.map((e) => e.t.pp), width: 2 },
+        ], { height: 150, zero: true, legend: true, yfmt: (v) => '$' + Math.round(v).toLocaleString('ru-RU'), xfmt: (v) => Math.round(v / 1000) + 'k рук' });
+      } else drawLines($('chartTeams'), [], { height: 150 });
     }
 
     // ------------------------------------------------------------ карточка бота
@@ -350,7 +418,7 @@
       const where = r.table >= 0 ? `за столом ${r.table + 1}, стек ${money(bot.stack)} (${r.stackBB.toFixed(0)} ББ)` : 'ожидает свободное место';
       const html = `
         <div class="bot-head"><h2>${esc(bot.name)}</h2>
-          <span class="pill ${bot.fixed ? 'fixed' : ''}">${esc(r.archLabel)}</span>
+          ${bot.team === 'company' ? '<span class="pill sss">Команда компании</span>' : bot.team === 'player' ? '<span class="pill">Игрок · seed ' + bot.seed + '</span>' : ''}<span class="pill ${bot.fixed ? 'fixed' : ''}">${esc(r.archLabel)}</span>
           <span class="pill ${r.strategy.toLowerCase()}">${r.strategy} · закупка ${g.buyIn.toFixed(0)} ББ</span>
           <span class="muted">${where}</span></div>
         <div class="muted">Стиль по статистике: <b>${esc(r.style)}</b>${bot.learnedFrom ? ` · последнее обучение у <b>${esc(bot.learnedFrom)}</b> (поколение ${bot.generation})` : ''}</div>
@@ -358,7 +426,7 @@
           <div class="bot-stat"><small>Прибыль</small><b class="${r.profit >= 0 ? 'pos-n' : 'neg-n'}">${fmt(r.profit)} $</b></div>
           <div class="bot-stat"><small>bb/100</small><b class="${r.bb100 >= 0 ? 'pos-n' : 'neg-n'}">${fmt(r.bb100, 1)}</b></div>
           <div class="bot-stat"><small>Раздач</small><b>${r.hands}</b></div>
-          <div class="bot-stat"><small>Рейк заплачен</small><b>$${r.rake.toFixed(2)}</b></div>
+          <div class="bot-stat"><small>Оборот / закупки</small><b>$${r.turnover.toFixed(0)} / $${r.drop.toFixed(0)}</b></div>
           <div class="bot-stat"><small>VPIP / PFR</small><b>${(s.vpipPct * 100).toFixed(0)} / ${(s.pfrPct * 100).toFixed(0)}</b></div>
           <div class="bot-stat"><small>3-bet / агрессия</small><b>${(s.threeBetPct * 100).toFixed(0)}% / ${(s.afq * 100).toFixed(0)}%</b></div>
           <div class="bot-stat"><small>C-bet / фолд на бет</small><b>${(s.cbetPct * 100).toFixed(0)}% / ${(s.foldToBetPct * 100).toFixed(0)}%</b></div>
